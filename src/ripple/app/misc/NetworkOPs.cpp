@@ -1208,7 +1208,9 @@ class ValidationCount
 {
 public:
     int trustedValidations, nodesUsing;
-    NodeID highNodeUsing, highValidation;
+    // Ledger hashes to break ties
+    uint256 highUsingHash, highTrustedValHash;
+    
 
     ValidationCount () : trustedValidations (0), nodesUsing (0)
     {
@@ -1230,10 +1232,10 @@ public:
             if (nodesUsing < v.nodesUsing)
                 return false;
 
-            return highNodeUsing > v.highNodeUsing;
+            return highUsingHash > v.highUsingHash;
         }
 
-        return highValidation > v.highValidation;
+        return highTrustedValHash > v.highTrustedValHash;
     }
 };
 
@@ -1259,17 +1261,19 @@ bool NetworkOPsImp::checkLastClosedLedger (
 
     hash_map<uint256, ValidationCount> ledgers;
     {
-        auto current = app_.getValidations ().currentTrustedDistribution (
-            closedLedger, prevClosedLedger,
-            m_ledgerMaster.getValidLedgerIndex());
+        hash_map<uint256, std::uint32_t> current =
+            app_.getValidations().currentTrustedDistribution(
+                closedLedger,
+                prevClosedLedger,
+                m_ledgerMaster.getValidLedgerIndex());
 
         for (auto& it: current)
         {
             auto& vc = ledgers[it.first];
-            vc.trustedValidations += it.second.count;
+            vc.trustedValidations += it.second;
 
-            if (it.second.highNode > vc.highValidation)
-                vc.highValidation = it.second.highNode;
+            if (it.first > vc.highTrustedValHash)
+                vc.highTrustedValHash = it.first;
         }
     }
 
@@ -1278,10 +1282,9 @@ bool NetworkOPsImp::checkLastClosedLedger (
     if (mMode >= omTRACKING)
     {
         ++ourVC.nodesUsing;
-        auto const ourNodeID = calcNodeID(
-            app_.nodeIdentity().first);
-        if (ourNodeID > ourVC.highNodeUsing)
-            ourVC.highNodeUsing = ourNodeID;
+        
+        if (closedLedger > ourVC.highUsingHash)
+            ourVC.highUsingHash = closedLedger;
     }
 
     for (auto& peer: peerList)
@@ -1293,10 +1296,9 @@ bool NetworkOPsImp::checkLastClosedLedger (
             try
             {
                 auto& vc = ledgers[peerLedger];
-                auto const nodeId = calcNodeID(peer->getNodePublic ());
-                if (vc.nodesUsing == 0 || nodeId > vc.highNodeUsing)
+                if (vc.nodesUsing == 0 || peerLedger > vc.highUsingHash)
                 {
-                    vc.highNodeUsing = nodeId;
+                    vc.highUsingHash = peerLedger;
                 }
 
                 ++vc.nodesUsing;
@@ -1323,13 +1325,13 @@ bool NetworkOPsImp::checkLastClosedLedger (
         // Temporary logging to make sure tiebreaking isn't broken
         if (it.second.trustedValidations > 0)
             JLOG(m_journal.trace())
-                << "  TieBreakTV: " << it.second.highValidation;
+                << "  TieBreakTV: " << it.second.highTrustedValHash;
         else
         {
             if (it.second.nodesUsing > 0)
             {
                 JLOG(m_journal.trace())
-                    << "  TieBreakNU: " << it.second.highNodeUsing;
+                    << "  TieBreakNU: " << it.second.highUsingHash;
             }
         }
 
