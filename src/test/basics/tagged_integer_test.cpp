@@ -1,7 +1,8 @@
 //------------------------------------------------------------------------------
 /*
-    This file is part of Beast: https://github.com/vinniefalco/Beast
+    This file is part of rippled: https://github.com/ripple/rippled
     Copyright 2014, Nikolaos D. Bougalis <nikb@bougalis.net>
+
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -17,19 +18,16 @@
 */
 //==============================================================================
 
-#if BEAST_INCLUDE_BEASTCONFIG
 #include <BeastConfig.h>
-#endif
-
+#include <ripple/basics/tagged_integer.h>
+#include <ripple/beast/unit_test.h>
 #include <type_traits>
 
-#include <ripple/beast/utility/tagged_integer.h>
-#include <ripple/beast/unit_test.h>
-
-namespace beast {
+namespace ripple {
+namespace test {
 
 class tagged_integer_test
-    : public unit_test::suite
+    : public beast::unit_test::suite
 {
 private:
     struct Tag1 { };
@@ -131,6 +129,8 @@ public:
         tmp = 1u + zero;
         expect (tmp == one, "Should be equal");
 
+        expect(static_cast<std::uint32_t>(one) == 1, "Explicit casts to 1");
+        expect(to_string(one) == "1", "to_string(1) to 1");
         expect(--tmp == zero, "Should be equal");
         expect(tmp++ == zero, "Should be equal");
         expect(tmp == one, "Should be equal");
@@ -146,9 +146,13 @@ public:
 
         tmp -= 1u;
         expect(tmp == zero, "Should be equal");
+
+        TagInt1 three{3};
+        expect(three % 2 == TagInt1{1}, "Should mod");
     }
 };
 
-BEAST_DEFINE_TESTSUITE(tagged_integer,utility,beast);
+BEAST_DEFINE_TESTSUITE(tagged_integer,ripple_basics,ripple);
 
-} // beast
+} // test
+} // ripple

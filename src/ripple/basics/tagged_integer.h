@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------------
 /*
-    This file is part of Beast: https://github.com/vinniefalco/Beast
+    This file is part of rippled: https://github.com/ripple/rippled
     Copyright 2014, Nikolaos D. Bougalis <nikb@bougalis.net>
 
     Permission to use, copy, modify, and/or distribute this software for any
@@ -27,7 +27,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace beast {
+namespace ripple {
 
 /** A type-safe wrap around standard unsigned integral types
 
@@ -99,6 +99,12 @@ public:
         return orig;
     }
 
+    explicit
+    operator Int() const
+    {
+        return m_value;
+    }
+
     template <class OtherInt>
     typename std::enable_if <
         std::is_integral <OtherInt>::value &&
@@ -156,6 +162,19 @@ public:
     {
         return tagged_integer (lhs.m_value - rhs);
     }
+
+    template <class OtherInt>
+    friend
+    typename std::enable_if <
+        std::is_integral <OtherInt>::value &&
+            sizeof (OtherInt) <= sizeof (Int),
+    tagged_integer <Int, Tag>>::type
+    operator% (tagged_integer const& lhs,
+               OtherInt rhs) noexcept
+    {
+        return tagged_integer (lhs.m_value % rhs);
+    }
+
 
     friend
     Int
@@ -229,15 +248,24 @@ public:
         s >> t.m_value;
         return s;
     }
+
+    friend
+    std::string
+    to_string(tagged_integer const& t)
+    {
+        return std::to_string(t.m_value);
+    }
 };
 
+} // ripple
+
+namespace beast {
 template <class Int, class Tag, class HashAlgorithm>
-struct is_contiguously_hashable<tagged_integer<Int, Tag>, HashAlgorithm>
+struct is_contiguously_hashable<ripple::tagged_integer<Int, Tag>, HashAlgorithm>
     : public is_contiguously_hashable<Int, HashAlgorithm>
 {
 };
 
-}
-
+} // beast
 #endif
 
