@@ -86,11 +86,8 @@ public:
     }
 };
 
-//< Unique identifier for each node in the network
-using PeerID = std::uint32_t;
-
 //< A unique node list defines a set of trusted peers used in consensus
-using UNL = boost::container::flat_set<PeerID>;
+using UNL = boost::container::flat_set<std::uint32_t>;
 
 /** Trust graph defining the consensus simulation
 
@@ -116,14 +113,14 @@ public:
 
     //< Whether node `i` trusts node `j`
     inline bool
-    trusts(PeerID i, PeerID j) const
+    trusts(std::uint32_t i, std::uint32_t j) const
     {
         return unl(i).find(j) != unl(i).end();
     }
 
     //< Get the UNL for node `i`
     inline UNL const&
-    unl(PeerID i) const
+    unl(std::uint32_t i) const
     {
         return UNLs_[assignment_[i]];
     }
@@ -186,7 +183,7 @@ public:
         //    to weights
         std::vector<UNL> unls(numUNLs);
         std::generate(unls.begin(), unls.end(), [&]() {
-            std::vector<PeerID> ids(size);
+            std::vector<std::uint32_t> ids(size);
             std::iota(ids.begin(), ids.end(), 0);
             auto res = random_weighted_shuffle(ids, weights, g);
             return UNL(res.begin(), res.begin() + unlSizePDF(g));
@@ -230,7 +227,7 @@ template <class DelayModel>
 auto
 topology(TrustGraph const& tg, DelayModel const& d)
 {
-    return [&](PeerID i, PeerID j) {
+    return [&](std::uint32_t i, std::uint32_t j) {
         return tg.trusts(i, j) ? boost::make_optional(d(i, j)) : boost::none;
     };
 }
@@ -245,7 +242,7 @@ public:
     }
 
     inline std::chrono::nanoseconds
-    operator()(PeerID const& i, PeerID const& j) const
+    operator()(std::uint32_t const& i, std::uint32_t const& j) const
     {
         return d_;
     }

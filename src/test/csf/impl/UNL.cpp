@@ -59,7 +59,7 @@ TrustGraph::canFork(double quorum) const
                 2.0 * (1. - quorum) * std::max(unlA.size(), unlB.size());
 
             int intersectionSize =
-                std::count_if(unlA.begin(), unlA.end(), [&](PeerID id) {
+                std::count_if(unlA.begin(), unlA.end(), [&](std::uint32_t id) {
                     return unlB.find(id) != unlB.end();
                 });
 
@@ -73,7 +73,7 @@ TrustGraph::canFork(double quorum) const
 TrustGraph
 TrustGraph::makeClique(int size, int overlap)
 {
-    using bci = boost::counting_iterator<PeerID>;
+    using bci = boost::counting_iterator<std::uint32_t>;
 
     // Split network into two cliques with the given overlap
     // Clique A has nodes [0,endA) and Clique B has [startB,numPeers)
@@ -105,8 +105,8 @@ TrustGraph::makeClique(int size, int overlap)
 TrustGraph
 TrustGraph::makeComplete(int size)
 {
-    UNL all{boost::counting_iterator<PeerID>(0),
-            boost::counting_iterator<PeerID>(size)};
+    UNL all{boost::counting_iterator<std::uint32_t>(0),
+            boost::counting_iterator<std::uint32_t>(size)};
 
     return TrustGraph(std::vector<UNL>(1, all), std::vector<int>(size, 0));
 }

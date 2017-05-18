@@ -18,8 +18,8 @@
 //==============================================================================
 #ifndef RIPPLE_TEST_CSF_TX_H_INCLUDED
 #define RIPPLE_TEST_CSF_TX_H_INCLUDED
-
 #include <ripple/beast/hash/hash_append.h>
+#include <boost/function_output_iterator.hpp>
 #include <boost/container/flat_set.hpp>
 #include <map>
 #include <ostream>

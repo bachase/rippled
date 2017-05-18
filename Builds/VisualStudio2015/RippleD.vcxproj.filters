@@ -5226,6 +5226,9 @@
     <ClCompile Include="..\..\src\test\csf\BasicNetwork_test.cpp">
       <Filter>test\csf</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\csf\impl\Ledger.cpp">
+      <Filter>test\csf\impl</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\csf\impl\UNL.cpp">
       <Filter>test\csf\impl</Filter>
     </ClCompile>
@@ -5248,6 +5251,9 @@
       <Filter>test\csf</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\test\csf\UNL.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\test\csf\Validation.h">
       <Filter>test\csf</Filter>
     </ClInclude>
     <ClCompile Include="..\..\src\test\json\json_value_test.cpp">

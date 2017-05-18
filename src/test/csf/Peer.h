@@ -23,100 +23,24 @@
 #include <boost/container/flat_set.hpp>
 #include <ripple/consensus/Consensus.h>
 #include <ripple/consensus/ConsensusProposal.h>
+#include <ripple/consensus/Validations.h>
 #include <test/csf/Scheduler.h>
 #include <test/csf/Ledger.h>
 #include <test/csf/Tx.h>
 #include <test/csf/UNL.h>
-
+#include <test/csf/Validation.h>
+#include <algorithm>
 namespace ripple {
 namespace test {
 namespace csf {
 
-/** Store validations reached by peers */
-struct Validation
-{
-    PeerID id;
-    Ledger::ID ledger;
-    Ledger::ID prevLedger;
-};
-
-namespace bc = boost::container;
-
-class Validations
-{
-    //< Ledgers seen by peers, saved in order received (which should be order
-    //<  created)
-    bc::flat_map<Ledger::ID, bc::flat_set<PeerID>> nodesFromLedger;
-    bc::flat_map<Ledger::ID, bc::flat_set<PeerID>> nodesFromPrevLedger;
-    bc::flat_map<Ledger::ID, bc::flat_map<Ledger::ID, std::size_t>>
-        childLedgers;
-
-public:
-    void
-    update(Validation const& v)
-    {
-        nodesFromLedger[v.ledger].insert(v.id);
-        if (v.ledger.seq > 0)
-        {
-            nodesFromPrevLedger[v.prevLedger].insert(v.id);
-            childLedgers[v.prevLedger][v.ledger]++;
-        }
-    }
-
-    //< The number of peers who have validated this ledger
-    std::size_t
-    proposersValidated(Ledger::ID const& prevLedger) const
-    {
-        auto it = nodesFromLedger.find(prevLedger);
-        if (it != nodesFromLedger.end())
-            return it->second.size();
-        return 0;
-    }
-
-    /** The number of peers that are past this ledger, i.e.
-        they have a newer most recent ledger, but have this ledger
-        as an ancestor.
-    */
-    std::size_t
-    proposersFinished(Ledger::ID const& prevLedger) const
-    {
-        auto it = nodesFromPrevLedger.find(prevLedger);
-        if (it != nodesFromPrevLedger.end())
-            return it->second.size();
-        return 0;
-    }
-
-    /** Returns the ledger starting from prevLedger with the most validations.
-     */
-    Ledger::ID
-    getBestLCL(Ledger::ID const& currLedger, Ledger::ID const& prevLedger) const
-    {
-        auto it = childLedgers.find(prevLedger);
-        if (it != childLedgers.end() && !it->second.empty())
-        {
-            std::size_t bestCount = 0;
-            Ledger::ID bestLedger;
-
-            for (auto const& b : it->second)
-            {
-                auto currCount = b.second;
-                if (currLedger == b.first)
-                    currCount++;
-                if (currCount > bestCount)
-                    bestLedger = b.first;
-                if (currCount == bestCount && currLedger == b.first)
-                    bestLedger = b.first;
-            }
-            return bestLedger;
-        }
-        return currLedger;
-    }
-};
-
 /** Proposal is a position taken in the consensus process and is represented
     directly from the generic types.
 */
-using Proposal = ConsensusProposal<PeerID, Ledger::ID, TxSetType>;
+using Proposal = ConsensusProposal<NodeID, Ledger::ID, TxSetType>;
+
+namespace bc = boost::container;
+
 class PeerPosition
 {
 public:
@@ -141,14 +65,53 @@ private:
     Proposal proposal_;
 };
 
-
 /** Represents a single node participating in the consensus process.
-    It implements the Adaptor requirements of generic Consensus.
+    It implements the Callbacks required by Consensus.
 */
 struct Peer
 {
+    // Generic Validations policy that saves stale/flushed data into
+    // a StaleData instance.
+    class StalePolicy
+    {
+        Peer& p_;
+
+    public:
+        StalePolicy(Peer& p) : p_{p}
+        {
+        }
+
+        NetClock::time_point
+        now() const
+        {
+            return p_.now();
+        }
+
+        void
+        onStale(Validation && v)
+        {}
+
+        void
+        flush(hash_map<NodeKey, Validation>&& remaining) {}
+
+    };
+
+    // Non-locking mutex to avoid locks in generic Validations
+    struct NotAMutex
+    {
+        void
+        lock()
+        {
+        }
+
+        void
+        unlock()
+        {
+        }
+    };
+
     using Ledger_t = Ledger;
-    using NodeID_t = PeerID;
+    using NodeID_t = NodeID;
     using TxSet_t = TxSet;
     using PeerPosition_t = PeerPosition;
     using Result = ConsensusResult<Peer>;
@@ -156,7 +119,8 @@ struct Peer
     Consensus<Peer> consensus;
 
     //! Our unique ID
-    PeerID id;
+    NodeID id;
+    NodeKey key;
 
     //! openTxs that haven't been closed in a ledger yet
     TxSetType openTxs;
@@ -171,8 +135,8 @@ struct Peer
     //! UNL of trusted peers
     UNL unl;
 
-    //! Most recent ledger completed by peers
-    Validations peerValidations;
+    //! Validationss from trusted nodes
+    Validations<StalePolicy, Validation, NotAMutex> validations;
 
     // The ledgers, proposals, TxSets and Txs this peer has seen
     bc::flat_map<Ledger::ID, Ledger> ledgers;
@@ -200,18 +164,19 @@ struct Peer
 
     std::size_t prevProposers_ = 0;
     std::chrono::milliseconds prevRoundTime_;
-    
+
     // Simulation parameters
     ConsensusParms parms_;
 
     //! All peers start from the default constructed ledger
-    Peer(PeerID i, Scheduler & s, BasicNetwork<Peer*>& n, UNL const& u, ConsensusParms parms)
+    Peer(NodeID i, Scheduler & s, BasicNetwork<Peer*>& n, UNL const& u, ConsensusParms parms)
         : consensus(s.clock(), *this, beast::Journal{})
         , id{i}
+        , key{id, 0}
         , scheduler{s}
         , net{n}
         , unl(u)
-        , parms_{parms}
+        , validations{ValidationParms{}, s.clock(), beast::Journal{}, *this}
     {
         ledgers[lastClosedLedger.id()] = lastClosedLedger;
     }
@@ -263,13 +228,13 @@ struct Peer
     std::size_t
     proposersValidated(Ledger::ID const& prevLedger)
     {
-        return peerValidations.proposersValidated(prevLedger);
+        return validations.numTrustedForLedger(prevLedger);
     }
 
     std::size_t
     proposersFinished(Ledger::ID const& prevLedger)
     {
-        return peerValidations.proposersFinished(prevLedger);
+        return validations.getNodesAfter(prevLedger);
     }
 
     Result
@@ -330,7 +295,13 @@ struct Peer
         openTxs.erase(it, openTxs.end());
 
         if (validating_)
-            relay(Validation{id, newLedger.id(), newLedger.parentID()});
+        {
+            Validation v{newLedger.id(), newLedger.seq(), now(), now(), key, id, false};
+            // relay is not trusted
+            relay(v);
+            // we trust ourselves
+            addTrustedValidation(v);
+        }
 
         // kick off the next round...
         // in the actual implementation, this passes back through
@@ -338,22 +309,49 @@ struct Peer
         ++completedLedgers;
         // startRound sets the LCL state, so we need to call it once after
         // the last requested round completes
-        // TODO: reconsider this and instead just save LCL generated here?
         if (completedLedgers <= targetLedgers)
         {
-            consensus.startRound(
-                now(), lastClosedLedger.id(), lastClosedLedger, proposing_);
+            startRound();
         }
     }
 
-    Ledger::ID
-    getPrevLedger(Ledger::ID const& ledgerID, Ledger const& ledger, ConsensusMode mode)
+    Ledger::Seq
+    earliestAllowedSeq() const
     {
-        // TODO: Use generic validation code
-        if (mode != ConsensusMode::wrongLedger && ledgerID.seq > 0 &&
-            ledger.id().seq > 0)
-            return peerValidations.getBestLCL(ledgerID, ledger.parentID());
-        return ledgerID;
+        if(lastClosedLedger.seq() > Ledger::Seq{20})
+            return lastClosedLedger.seq() - 20;
+        return Ledger::Seq{0};
+    }
+    Ledger::ID
+    getPrevLedger(
+        Ledger::ID const& ledgerID,
+        Ledger const& ledger,
+        ConsensusMode mode)
+    {
+        // only do if we are past the genesis ledger
+        if(ledger.seq() ==  Ledger::Seq{0})
+            return ledgerID;
+
+        Ledger::ID parentID;
+        // Only set the parent ID if we believe ledger is the right ledger
+        if (mode != ConsensusMode::wrongLedger)
+            parentID = ledger.parentID();
+
+        // Get validators that are on our ledger, or "close" to being on
+        // our ledger.
+        auto ledgerCounts =
+            validations.currentTrustedDistribution(
+                ledgerID,
+                parentID,
+                earliestAllowedSeq());
+
+        Ledger::ID netLgr = getPreferredLedger(ledgerID, ledgerCounts);
+
+        if (netLgr != ledgerID)
+        {
+            // signal change?
+        }
+        return netLgr;
     }
 
     void
@@ -375,7 +373,7 @@ struct Peer
     receive(PeerPosition const& peerPos)
     {
         Proposal const & p = peerPos.proposal();
-        if (unl.find(p.nodeID()) == unl.end())
+        if (unl.find(static_cast<std::uint32_t>(p.nodeID())) == unl.end())
             return;
 
         // TODO: Supress repeats more efficiently
@@ -408,11 +406,21 @@ struct Peer
     }
 
     void
+    addTrustedValidation(Validation v)
+    {
+        v.setTrusted();
+        v.setSeen(now());
+        validations.add(v.key(), v);
+    }
+
+    void
     receive(Validation const& v)
     {
-        if (unl.find(v.id) != unl.end())
+        if (unl.find(static_cast<std::uint32_t>(v.nodeID())) != unl.end())
         {
-            schedule(validationDelay, [&, v]() { peerValidations.update(v); });
+            schedule(validationDelay, [&, v](){
+                addTrustedValidation(v);
+            });
         }
     }
 
@@ -441,16 +449,32 @@ struct Peer
         if (completedLedgers < targetLedgers)
             scheduler.in(parms().ledgerGRANULARITY, [&]() { timerEntry(); });
     }
+
+    void
+    startRound()
+    {
+        auto valDistribution = validations.currentTrustedDistribution(
+            lastClosedLedger.id(),
+            lastClosedLedger.parentID(),
+            earliestAllowedSeq());
+
+        Ledger::ID bestLCL =
+            getPreferredLedger(lastClosedLedger.id(), valDistribution);
+
+        // TODO:
+        //  - Get dominant peer ledger if no validated available?
+        //  - Check that we are switching to something compatible with our
+        //    (network) validated history of ledgers?
+        consensus.startRound(now(), bestLCL, lastClosedLedger, proposing_);
+    }
+
     void
     start()
     {
+        // TODO: Expire validations less frequently
+        validations.expire();
         scheduler.in(parms().ledgerGRANULARITY, [&]() { timerEntry(); });
-        // The ID is the one we have seen the most validations for
-        // In practice, we might not actually have that ledger itself yet,
-        // so there is no gaurantee that bestLCL == lastClosedLedger.id()
-        auto bestLCL = peerValidations.getBestLCL(
-            lastClosedLedger.id(), lastClosedLedger.parentID());
-        consensus.startRound(now(), bestLCL, lastClosedLedger, proposing_);
+        startRound();
     }
 
     NetClock::time_point

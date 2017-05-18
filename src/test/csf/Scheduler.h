@@ -145,7 +145,9 @@ private:
 
     qalloc alloc_;
     queue_type queue_;
-    clock_type clock_;
+
+    // Aged containers that rely on this clock take a non-const reference =(
+    mutable clock_type clock_;
 
 public:
     Scheduler(Scheduler const&) = delete;
@@ -158,8 +160,8 @@ public:
     qalloc const&
     alloc() const;
 
-    /** Return the clock. */
-    clock_type const&
+    /** Return the clock. (aged_containers want a non-const ref =( */
+    clock_type &
     clock() const;
 
     /** Return the current network time.
@@ -361,7 +363,7 @@ Scheduler::alloc() const
 }
 
 inline auto
-Scheduler::clock() const -> clock_type const&
+Scheduler::clock() const -> clock_type &
 {
     return clock_;
 }

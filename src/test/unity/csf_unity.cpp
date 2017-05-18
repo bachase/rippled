@@ -22,3 +22,4 @@
 #include <test/csf/BasicNetwork_test.cpp>
 #include <test/csf/Scheduler_test.cpp>
 #include <test/csf/impl/UNL.cpp>
+#include <test/csf/impl/Ledger.cpp>

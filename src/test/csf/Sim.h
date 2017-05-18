@@ -56,12 +56,12 @@ public:
         : net{scheduler}
     {
         peers.reserve(g.numPeers());
-        for (int i = 0; i < g.numPeers(); ++i)
-            peers.emplace_back(i, scheduler, net, g.unl(i), parms);
+        for (std::uint32_t i = 0; i < g.numPeers(); ++i)
+            peers.emplace_back(NodeID{i}, scheduler, net, g.unl(i), parms);
 
-        for (int i = 0; i < peers.size(); ++i)
+        for (std::uint32_t i = 0; i < peers.size(); ++i)
         {
-            for (int j = 0; j < peers.size(); ++j)
+            for (std::uint32_t j = 0; j < peers.size(); ++j)
             {
                 if (i != j)
                 {
@@ -86,17 +86,16 @@ public:
     {
         for (auto& p : peers)
         {
-            if (p.completedLedgers == 0)
-                p.relay(Validation{p.id, p.prevLedgerID(), p.prevLedgerID()});
             p.targetLedgers = p.completedLedgers + ledgers;
             p.start();
         }
         scheduler.step();
     }
 
-    std::vector<Peer> peers;
     Scheduler scheduler;
     BasicNetwork<Peer*> net;
+    std::vector<Peer> peers;
+
 };
 
 }  // csf

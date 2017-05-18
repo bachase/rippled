@@ -880,7 +880,7 @@ Consensus<Adaptor>::getJson(bool full) const
     if (mode_.get() != ConsensusMode::wrongLedger)
     {
         ret["synched"] = true;
-        ret["ledger_seq"] = previousLedger_.seq() + 1;
+        ret["ledger_seq"] = static_cast<std::uint32_t>(previousLedger_.seq() + 1);
         ret["close_granularity"] = static_cast<Int>(closeResolution_.count());
     }
     else

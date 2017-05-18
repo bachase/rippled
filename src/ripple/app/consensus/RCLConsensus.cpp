@@ -246,19 +246,7 @@ RCLConsensus::Adaptor::getPrevLedger(
         app_.getValidations().currentTrustedDistribution(
             ledgerID, parentID, ledgerMaster_.getValidLedgerIndex());
 
-    uint256 netLgr = ledgerID;
-    int netLgrCount = 0;
-    for (auto const & it : ledgerCounts)
-    {
-        // Switch to ledger supported by more peers
-        // Or stick with ours on a tie
-        if ((it.second > netLgrCount) ||
-            ((it.second== netLgrCount) && (it.first == ledgerID)))
-        {
-            netLgr = it.first;
-            netLgrCount = it.second;
-        }
-    }
+    uint256 netLgr = getPreferredLedger(ledgerID, ledgerCounts);
 
     if (netLgr != ledgerID)
     {
