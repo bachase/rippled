@@ -5226,13 +5226,16 @@
     <ClCompile Include="..\..\src\test\csf\BasicNetwork_test.cpp">
       <Filter>test\csf</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\test\csf\impl\Ledger.cpp">
+    <ClCompile Include="..\..\src\test\csf\impl\ledgers.cpp">
+      <Filter>test\csf\impl</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\test\csf\impl\Sim.cpp">
       <Filter>test\csf\impl</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\test\csf\impl\UNL.cpp">
       <Filter>test\csf\impl</Filter>
     </ClCompile>
-    <ClInclude Include="..\..\src\test\csf\Ledger.h">
+    <ClInclude Include="..\..\src\test\csf\ledgers.h">
       <Filter>test\csf</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\test\csf\Peer.h">

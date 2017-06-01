@@ -22,7 +22,7 @@
 #include <boost/optional.hpp>
 #include <memory>
 #include <ripple/basics/tagged_integer.h>
-#include <test/csf/Ledger.h>
+#include <test/csf/ledgers.h>
 #include <utility>
 
 namespace ripple {
@@ -49,7 +49,7 @@ class Validation
     NodeID nodeID_{0};
     bool trusted_ = true;
     boost::optional<std::uint32_t> loadFee_;
-  
+
 public:
     Validation(Ledger::ID id,
         Ledger::Seq seq,

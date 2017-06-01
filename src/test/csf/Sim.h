@@ -22,6 +22,7 @@
 
 #include <test/csf/BasicNetwork.h>
 #include <test/csf/Scheduler.h>
+#include <test/csf/Peer.h>
 #include <test/csf/UNL.h>
 
 namespace ripple {
@@ -31,6 +32,12 @@ namespace csf {
 class Sim
 {
 public:
+
+    LedgerOracle oracle;
+	Scheduler scheduler;
+    BasicNetwork<Peer*> net;
+    std::vector<Peer> peers;
+
     /** Create a simulator for the given trust graph and network topology.
 
         Create a simulator for consensus over the given trust graph and connect
@@ -57,7 +64,7 @@ public:
     {
         peers.reserve(g.numPeers());
         for (std::uint32_t i = 0; i < g.numPeers(); ++i)
-            peers.emplace_back(NodeID{i}, scheduler, net, g.unl(i), parms);
+            peers.emplace_back(i, scheduler, oracle, net, g.unl(i));
 
         for (std::uint32_t i = 0; i < peers.size(); ++i)
         {
@@ -82,19 +89,23 @@ public:
         @param ledgers The number of additional ledgers to create
     */
     void
-    run(int ledgers)
-    {
-        for (auto& p : peers)
-        {
-            p.targetLedgers = p.completedLedgers + ledgers;
-            p.start();
-        }
-        scheduler.step();
-    }
+    run(int ledgers);
 
-    Scheduler scheduler;
-    BasicNetwork<Peer*> net;
-    std::vector<Peer> peers;
+    /** Check whether all peers in the network are synchronized.
+
+        Nodes in the network are synchronized if they share the same last
+        fully validated and last generated ledger.
+    */
+    bool
+    synchronized() const;
+
+    /** Calculate the number of forks in the network.
+
+        A fork occurs if two peers have fullyValidatedLedgers that are not on
+        the same chain of ledgers.
+    */
+    std::size_t
+    forks() const;
 
 };
 

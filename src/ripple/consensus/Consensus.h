@@ -567,7 +567,6 @@ Consensus<Adaptor>::Consensus(
     beast::Journal journal)
     : adaptor_(adaptor)
     , clock_{clock}
-    , prevRoundTime_{adaptor.parms().ledgerIDLE_INTERVAL}
     , j_{journal}
 {
     JLOG(j_.debug()) << "Creating consensus object";
@@ -583,7 +582,7 @@ Consensus<Adaptor>::startRound(
 {
     if (firstRound_)
     {
-        // take our initial view of closeTime_ from the seed ledger
+        prevRoundTime_ = adaptor_.parms().ledgerIDLE_INTERVAL;
         prevCloseTime_ = prevLedger.closeTime();
         firstRound_ = false;
     }

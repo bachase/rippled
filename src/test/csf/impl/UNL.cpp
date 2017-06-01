@@ -93,7 +93,7 @@ TrustGraph::makeClique(int size, int overlap)
     {
         if (i < startB)
             assignment[i] = 0;
-        else if (i > endA)
+        else if (i >= endA)
             assignment[i] = 1;
         else
             assignment[i] = 2;

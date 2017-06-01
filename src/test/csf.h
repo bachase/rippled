@@ -18,7 +18,7 @@
 //==============================================================================
 
 #include <test/csf/BasicNetwork.h>
-#include <test/csf/Ledger.h>
+#include <test/csf/ledgers.h>
 #include <test/csf/Peer.h>
 #include <test/csf/Scheduler.h>
 #include <test/csf/Sim.h>

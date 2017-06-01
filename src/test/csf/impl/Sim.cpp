@@ -17,45 +17,47 @@
 */
 //==============================================================================
 #include <BeastConfig.h>
-#include <test/csf/Ledger.h>
-
-#include <sstream>
+#include <test/csf/Sim.h>
 
 namespace ripple {
 namespace test {
 namespace csf {
 
-Ledger::Instance const Ledger::genesis;
-hash_map<Ledger::Instance, Ledger::ID> Ledger::instances;
-Ledger::ID Ledger::nextUniqueID{1};
-
-Json::Value
-Ledger::getJson() const
+void
+Sim::run(int ledgers)
 {
-    Json::Value res(Json::objectValue);
-    res["seq"] = static_cast<Seq::value_type>(seq());
-    return res;
+    for (auto& p : peers)
+    {
+        p.targetLedgers = p.completedLedgers + ledgers;
+        p.start();
+    }
+    scheduler.step();
 }
 
-Ledger
-Ledger::close(TxSetType const& txs,
-    NetClock::duration closeTimeResolution,
-    NetClock::time_point const& consensusCloseTime,
-    bool closeTimeAgree) const
+bool
+Sim::synchronized() const
 {
-    Instance next(*instance_);
-    next.txs.insert(txs.begin(), txs.end());
-    next.seq = seq() + 1;
-    next.closeTimeResolution = closeTimeResolution;
-    next.closeTime = effCloseTime(
-        consensusCloseTime, closeTimeResolution, instance_->parentCloseTime);
-    next.closeTimeAgree = closeTimeAgree;
-    next.parentCloseTime = closeTime();
-    next.parentID = id();
-    auto it = instances.find(next);
-    if (it == instances.end())
-        it = instances.emplace(next, nextUniqueID++).first;
-    return Ledger(it->second, &(it->first));
+    if (peers.size() < 1)
+        return true;
+    Peer const& ref = peers.front();
+    return std::all_of(peers.begin(), peers.end(), [&ref](Peer const& p) {
+        return p.lastClosedLedger.get().id() ==
+            ref.lastClosedLedger.get().id() &&
+            p.fullyValidatedLedger.get().id() ==
+            ref.fullyValidatedLedger.get().id();
+    });
+}
+
+std::size_t
+Sim::forks() const
+{
+    if(peers.size() < 1)
+        return 0;
+    std::set<Ledger> ledgers;
+    for(auto const & peer : peers)
+        ledgers.insert(peer.fullyValidatedLedger.get());
+
+    return oracle.forks(ledgers);
 }
 
 }  // namespace csf

@@ -19,8 +19,6 @@
 #include <BeastConfig.h>
 #include <ripple/beast/clock/manual_clock.h>
 #include <ripple/beast/unit_test.h>
-#include <ripple/consensus/Consensus.h>
-#include <ripple/consensus/ConsensusProposal.h>
 #include <test/csf.h>
 #include <utility>
 
@@ -131,8 +129,8 @@ public:
         s.scheduler.step();
 
         // Inspect that the proper ledger was created
-        auto const & lcl =p.lastClosedLedger;
-        BEAST_EXPECT(p.prevLedgerID() == p.lastClosedLedger.id());
+        auto const & lcl =p.lastClosedLedger.get();
+        BEAST_EXPECT(p.prevLedgerID() == lcl.id());
         BEAST_EXPECT(lcl.seq() == Ledger::Seq{1});
         BEAST_EXPECT(lcl.txs().size() == 1);
         BEAST_EXPECT(
@@ -160,19 +158,23 @@ public:
         for (auto& p : sim.peers)
             p.submit(Tx(static_cast<std::uint32_t>(p.id)));
 
-        // Verify all peers have the same LCL and it has all the Txs
         sim.run(1);
-        for (auto& p : sim.peers)
+
+        // All peers are in sync
+        if (BEAST_EXPECT(sim.synchronized()))
         {
-            auto const & lcl = p.lastClosedLedger;
-            BEAST_EXPECT(lcl.id() == p.prevLedgerID());
+            // Inspect the first node's state
+            auto const & lcl = sim.peers.front().lastClosedLedger.get();
+            BEAST_EXPECT(lcl.id() == sim.peers.front().prevLedgerID());
             BEAST_EXPECT(lcl.seq() == Ledger::Seq{1});
-            BEAST_EXPECT(p.prevProposers() == sim.peers.size() - 1);
+            // All peers proposed
+            BEAST_EXPECT(
+                sim.peers.front().prevProposers() == sim.peers.size() - 1);
+            // All transactions were accepted
             for (std::uint32_t i = 0; i < sim.peers.size(); ++i)
                 BEAST_EXPECT(lcl.txs().find(Tx{i}) != lcl.txs().end());
-            // Matches peer 0 ledger
-            BEAST_EXPECT(lcl.txs() == sim.peers[0].lastClosedLedger.txs());
         }
+
     }
 
     void
@@ -197,7 +199,7 @@ public:
                         delayFactor * parms.ledgerGRANULARITY);
                 }));
 
-            sim.peers[0].proposing_ = sim.peers[0].validating_ = isParticipant;
+            sim.peers[0].runAsValidator = isParticipant;
 
             // All peers submit their own ID as a transaction and relay it to
             // peers
@@ -208,47 +210,54 @@ public:
 
             sim.run(1);
 
-            // Verify all peers have same LCL but are missing transaction 0
-            // which was not received by all peers before the ledger closed
-            for (auto& p : sim.peers)
+            // All peers are in sync even with a slower peer 0
+            if (BEAST_EXPECT(sim.synchronized()))
             {
-                auto const& lcl = p.lastClosedLedger;
+                // Closed ledger has all but transaction 0
+                auto const& lcl = sim.peers.front().lastClosedLedger.get();
                 BEAST_EXPECT(lcl.seq() == Ledger::Seq{1});
-
-                // If peer 0 is participating
-                if (isParticipant)
-                {
-                    BEAST_EXPECT(p.prevProposers() == sim.peers.size() - 1);
-                    // Peer 0 closes first because it sees a quorum of agreeing
-                    // positions from all other peers in one hop (1->0, 2->0,
-                    // ..) The other peers take an extra timer period before
-                    // they find that Peer 0 agrees with them ( 1->0->1,
-                    // 2->0->2, ...)
-                    if (p.id != NodeID{0})
-                        BEAST_EXPECT(
-                            p.prevRoundTime() > sim.peers[0].prevRoundTime());
-                }
-                else  // peer 0 is not participating
-                {
-                    auto const proposers = p.prevProposers();
-                    if (p.id == NodeID{0})
-                        BEAST_EXPECT(proposers == sim.peers.size() - 1);
-                    else
-                        BEAST_EXPECT(proposers == sim.peers.size() - 2);
-
-                    // so all peers should have closed together
-                    BEAST_EXPECT(
-                        p.prevRoundTime() == sim.peers[0].prevRoundTime());
-                }
-
                 BEAST_EXPECT(lcl.txs().find(Tx{0}) == lcl.txs().end());
                 for (std::uint32_t i = 1; i < sim.peers.size(); ++i)
                     BEAST_EXPECT(lcl.txs().find(Tx{i}) != lcl.txs().end());
-                // Matches peer 0 ledger
-                BEAST_EXPECT(lcl.txs()== sim.peers[0].lastClosedLedger.txs());
+
+                // Peer 0 still has its slow transaction waiting to apply
+                BEAST_EXPECT(
+                    sim.peers[0].openTxs.find(Tx{0}) !=
+                    sim.peers[0].openTxs.end());
+
+                // Verify all peers have same LCL but are missing transaction 0
+                // which was not received by all peers before the ledger closed
+                for (auto& p : sim.peers)
+                {
+                    // If peer 0 is participating
+                    if (isParticipant)
+                    {
+                        BEAST_EXPECT(p.prevProposers() == sim.peers.size() - 1);
+                        // Peer 0 closes first because it sees a quorum of
+                        // agreeing positions from all other peers in one hop
+                        // (1->0, 2->0,
+                        // ..) The other peers take an extra timer period before
+                        // they find that Peer 0 agrees with them ( 1->0->1,
+                        // 2->0->2, ...)
+                        if (p.id != NodeID{0})
+                            BEAST_EXPECT(
+                                p.prevRoundTime() >
+                                sim.peers[0].prevRoundTime());
+                    }
+                    else  // peer 0 is not participating
+                    {
+                        auto const proposers = p.prevProposers();
+                        if (p.id == NodeID{0})
+                            BEAST_EXPECT(proposers == sim.peers.size() - 1);
+                        else
+                            BEAST_EXPECT(proposers == sim.peers.size() - 2);
+
+                        // so all peers should have closed together
+                        BEAST_EXPECT(
+                            p.prevRoundTime() == sim.peers[0].prevRoundTime());
+                    }
+                }
             }
-            BEAST_EXPECT(
-                sim.peers[0].openTxs.find(Tx{0}) != sim.peers[0].openTxs.end());
         }
     }
 
@@ -293,7 +302,7 @@ public:
 
         // Run consensus without skew until we have a short close time
         // resolution
-        while (sim.peers.front().lastClosedLedger.closeTimeResolution() >=
+        while (sim.peers.front().lastClosedLedger.get().closeTimeResolution() >=
                parms.proposeFRESHNESS)
             sim.run(1);
 
@@ -303,11 +312,13 @@ public:
         sim.peers[2].clockSkew = parms.proposeFRESHNESS;
         sim.peers[3].clockSkew = parms.proposeFRESHNESS;
 
-        // Verify all peers have the same LCL and it has all the Txs
         sim.run(1);
-        for (auto& p : sim.peers)
+
+        // All nodes agreed to disagree
+        if (BEAST_EXPECT(sim.synchronized()))
         {
-            BEAST_EXPECT(!p.lastClosedLedger.closeAgree());
+            BEAST_EXPECT(
+                !sim.peers.front().lastClosedLedger.get().closeAgree());
         }
     }
 
@@ -352,8 +363,8 @@ public:
 
             TrustGraph tg{unls, membership};
 
-            // This topology can fork, which is why we are using it for this
-            // test.
+            // This topology can potentially fork, which is why we are using it
+            // for this test.
             BEAST_EXPECT(tg.canFork(parms.minCONSENSUS_PCT / 100.));
 
             auto netDelay = round<milliseconds>(0.2 * parms.ledgerGRANULARITY);
@@ -366,8 +377,7 @@ public:
             // tx 1
             for (auto& p : sim.peers)
             {
-                p.validationDelay = validationDelay;
-                p.missingLedgerDelay = netDelay;
+                p.delays.recvValidation = validationDelay;
                 if (unls[1].find(static_cast<std::uint32_t>(p.id)) != unls[1].end())
                     p.openTxs.insert(Tx{0});
                 else
@@ -393,28 +403,47 @@ public:
             //  3. Round to correct
             sim.run(3);
 
-            std::map<Ledger::Seq, std::set<Ledger::ID>> ledgers;
-            for (auto& p : sim.peers)
-            {
-                for (auto const& l : p.ledgers)
-                {
-                    ledgers[l.second.seq()].insert(l.first);
-                }
-            }
+            // The network never actually forks, since node 0-1 never see a
+            // quorum of validations to validate the incorrect chain.
 
-            BEAST_EXPECT(ledgers[Ledger::Seq{0}].size() == 1);
-            BEAST_EXPECT(ledgers[Ledger::Seq{1}].size() == 1);
-            if (validationDelay == 0s)
+            // However, for a non zero-validation delay, the network is not
+            // synchronized because nodes 0 and 1 are running one ledger behind
+            if (BEAST_EXPECT(sim.forks() == 1))
             {
-                BEAST_EXPECT(ledgers[Ledger::Seq{2}].size() == 2);
-                BEAST_EXPECT(ledgers[Ledger::Seq{3}].size() == 1);
-                BEAST_EXPECT(ledgers[Ledger::Seq{4}].size() == 1);
-            }
-            else
-            {
-                BEAST_EXPECT(ledgers[Ledger::Seq{2}].size() == 2);
-                BEAST_EXPECT(ledgers[Ledger::Seq{3}].size() == 2);
-                BEAST_EXPECT(ledgers[Ledger::Seq{4}].size() == 1);
+                for(auto const & peer : sim.peers)
+                {
+                    if(peer.id >= NodeID{2})
+                    {
+                        // No jumps
+                        BEAST_EXPECT(peer.fullyValidatedLedger.jumps().empty());
+                        BEAST_EXPECT(peer.lastClosedLedger.jumps().empty());
+                    }
+                    else
+                    {
+                        // last closed ledger jump between chains
+                        {
+                            BEAST_EXPECT(
+                                peer.lastClosedLedger.jumps().size() == 1);
+                            LedgerState::Jump const& jump =
+                                peer.lastClosedLedger.jumps().front();
+                            // Jump is to a different chain
+                            BEAST_EXPECT(jump.from.seq() <= jump.to.seq());
+                            BEAST_EXPECT(
+                                !sim.oracle.isAncestor(jump.from, jump.to));
+                        }
+                        // fully validted jump forward in same chain
+                        {
+                            BEAST_EXPECT(
+                                peer.fullyValidatedLedger.jumps().size() == 1);
+                            LedgerState::Jump const& jump =
+                                peer.fullyValidatedLedger.jumps().front();
+                            // Jump is to a different chain with same seq
+                            BEAST_EXPECT(jump.from.seq() < jump.to.seq());
+                            BEAST_EXPECT(
+                                sim.oracle.isAncestor(jump.from, jump.to));
+                        }
+                    }
+                }
             }
         }
 
@@ -454,14 +483,13 @@ public:
                     p.openTxs.insert(Tx(1));
 
                 // Delay validation processing
-                p.validationDelay = parms.ledgerGRANULARITY;
+                p.delays.recvValidation = parms.ledgerGRANULARITY;
             }
             // additional rounds to generate wrongLCL and recover
             sim.run(2);
 
             // Check all peers recovered
-            for (auto& p : sim.peers)
-                BEAST_EXPECT(p.prevLedgerID() == sim.peers[0].prevLedgerID());
+            BEAST_EXPECT(sim.synchronized());
         }
     }
 
@@ -506,10 +534,13 @@ public:
             // Since the overlapped nodes have a UNL that is the union of the
             // two cliques, the maximum sized UNL list is the number of peers
             if (overlap > 0.4 * numPeers)
-                BEAST_EXPECT(ledgers.size() == 1);
-            else  // Even if we do fork, there shouldn't be more than 3 ledgers
+                BEAST_EXPECT(sim.synchronized());
+            else
+            {
+                // Even if we do fork, there shouldn't be more than 3 ledgers
                 // One for cliqueA, one for cliqueB and one for nodes in both
-                BEAST_EXPECT(ledgers.size() <= 3);
+                BEAST_EXPECT(sim.forks() <= 3);
+            }
         }
     }
 
@@ -560,7 +591,7 @@ public:
             sim.scheduler.step_while([&]() {
                 for (auto& p : sim.peers)
                 {
-                    if (p.lastClosedLedger.txs().size() != 1)
+                    if (p.lastClosedLedger.get().txs().size() != 1)
                     {
                         return true;
                     }
@@ -614,14 +645,7 @@ public:
         }
         sim.run(1);
 
-        // See if the network forked
-        std::set<Ledger::ID> ledgers;
-        for (auto& p : sim.peers)
-        {
-            ledgers.insert(p.prevLedgerID());
-        }
-
-        BEAST_EXPECT(ledgers.size() == 1);
+        BEAST_EXPECT(sim.synchronized());
     }
 
     void
