@@ -5181,10 +5181,16 @@
     <ClCompile Include="..\..\src\test\conditions\PreimageSha256_test.cpp">
       <Filter>test\conditions</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\consensus\ClockSkewSim_test.cpp">
+      <Filter>test\consensus</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\consensus\Consensus_test.cpp">
       <Filter>test\consensus</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\test\consensus\LedgerTiming_test.cpp">
+      <Filter>test\consensus</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\test\consensus\ScaleFreeSim_test.cpp">
       <Filter>test\consensus</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\test\consensus\Validations_test.cpp">

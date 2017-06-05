@@ -34,6 +34,17 @@ Sim::run(int ledgers)
     scheduler.step();
 }
 
+void
+Sim::run(duration const & dur)
+{
+    for (auto& p : peers)
+    {
+        p.targetLedgers = std::numeric_limits<decltype(p.targetLedgers)>::max();
+        p.start();
+    }
+    scheduler.step_for(dur);
+}
+
 bool
 Sim::synchronized() const
 {

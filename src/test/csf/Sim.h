@@ -38,6 +38,9 @@ public:
     BasicNetwork<Peer*> net;
     std::vector<Peer> peers;
 
+    using time_point = BasicNetwork<Peer*>::time_point;
+    using duration = BasicNetwork<Peer*>::duration;
+
     /** Create a simulator for the given trust graph and network topology.
 
         Create a simulator for consensus over the given trust graph and connect
@@ -90,6 +93,10 @@ public:
     */
     void
     run(int ledgers);
+
+    /** Run consensus for the given duration */
+    void
+    run(duration const & dur);
 
     /** Check whether all peers in the network are synchronized.
 
