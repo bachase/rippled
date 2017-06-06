@@ -28,6 +28,8 @@
 #include <ripple/protocol/UintTypes.h>
 #include <memory>
 
+#include <boost/container/flat_map.hpp>
+
 namespace ripple {
 
 /** A transaction discovered to be in dispute during conensus.
@@ -56,9 +58,10 @@ public:
         @param ourVote Our vote on whether tx should be included
         @param j Journal for debugging
     */
-    DisputedTx(Tx_t const& tx, bool ourVote, beast::Journal j)
+    DisputedTx(Tx_t const& tx, bool ourVote, std::size_t numPeers, beast::Journal j)
         : yays_(0), nays_(0), ourVote_(ourVote), tx_(tx), j_(j)
     {
+        votes_.reserve(numPeers);
     }
 
     //! The unique id/hash of the disputed transaction.
@@ -128,7 +131,7 @@ private:
     bool ourVote_;  //< Our vote (true is yes)
     Tx_t tx_;       //< Transaction under dispute
 
-    hash_map<NodeID_t, bool> votes_;  //< Votes of our peers
+    boost::container::flat_map<NodeID_t, bool> votes_;
     beast::Journal j_;                //< Debug journal
 };
 
