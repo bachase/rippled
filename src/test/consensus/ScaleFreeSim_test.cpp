@@ -67,13 +67,14 @@ class ScaleFreeSim_test : public beast::unit_test::suite
         sim.run(1);
 
         // Run for 10 minues, submitting 100 tx/second
-        auto simDuration = 10min;
+        std::chrono::nanoseconds simDuration = 10min;
         std::chrono::nanoseconds quiet = 10s;
+
 
         struct SteadySubmitter
         {
             using Network = BasicNetwork<Peer*>;
-            std::chrono::nanoseconds txRate = 1000ms/10;
+            std::chrono::nanoseconds txRate = 1000ms/100;
             Network::time_point end;
             std::uint32_t txId = 0;
             Peer & target;
@@ -107,7 +108,14 @@ class ScaleFreeSim_test : public beast::unit_test::suite
         // run simulation for given duration
         sim.run(simDuration);
 
+        BEAST_EXPECT(sim.forks() == 1);
         BEAST_EXPECT(sim.synchronized());
+
+        // Print summary?
+        // # forks?  # of LCLs?
+        // # peers
+        // # tx submitted
+        // # ledgers/sec etc.?
     }
 };
 
