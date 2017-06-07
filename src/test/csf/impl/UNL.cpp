@@ -111,8 +111,8 @@ TrustGraph::makeComplete(int size)
     return TrustGraph(std::vector<UNL>(1, all), std::vector<int>(size, 0));
 }
 
-inline void
-TrustGraph::save_dot(std::string const& fileName)
+void
+TrustGraph::save_dot(std::string const& fileName) const
 {
     std::ofstream out(fileName);
     out << "digraph {\n";

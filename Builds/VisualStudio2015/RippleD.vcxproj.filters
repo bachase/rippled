@@ -5232,6 +5232,21 @@
     <ClCompile Include="..\..\src\test\csf\BasicNetwork_test.cpp">
       <Filter>test\csf</Filter>
     </ClCompile>
+    <ClInclude Include="..\..\src\test\csf\CollectorRef.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\test\csf\collectors.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\test\csf\events.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\test\csf\Histogram.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
+    <ClCompile Include="..\..\src\test\csf\Histogram_test.cpp">
+      <Filter>test\csf</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\csf\impl\ledgers.cpp">
       <Filter>test\csf\impl</Filter>
     </ClCompile>
@@ -5245,6 +5260,9 @@
       <Filter>test\csf</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\test\csf\Peer.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\test\csf\Proposal.h">
       <Filter>test\csf</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\test\csf\Scheduler.h">

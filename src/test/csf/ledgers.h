@@ -290,8 +290,10 @@ public:
         @param now When the switcho ccurs
         @param f The new ledger
 
+        @return Jump if the switch was a jump
+
     */
-    void
+    boost::optional<Jump>
     switchTo(NetClock::time_point const now, Ledger const& f);
 };
 

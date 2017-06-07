@@ -137,7 +137,7 @@ public:
 
     //< Save grapviz dot file reprentation of the trust graph
     void
-    save_dot(std::string const& fileName);
+    save_dot(std::string const& fileName) const;
 
     /** Generate a random trust graph based on random ranking of peers
 

@@ -16,15 +16,24 @@
     OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 //==============================================================================
+#ifndef RIPPLE_TEST_CSF_PROPOSAL_H_INCLUDED
+#define RIPPLE_TEST_CSF_PROPOSAL_H_INCLUDED
 
-#include <test/csf/BasicNetwork.h>
-#include <test/csf/Peer.h>
-#include <test/csf/Scheduler.h>
-#include <test/csf/Sim.h>
-#include <test/csf/Tx.h>
-#include <test/csf/UNL.h>
-#include <test/csf/events.h>
+#include <ripple/consensus/ConsensusProposal.h>
 #include <test/csf/ledgers.h>
-#include <test/csf/Proposal.h>
-#include <test/csf/Histogram.h>
-#include <test/csf/collectors.h>
+#include <test/csf/Tx.h>
+#include <test/csf/Validation.h>
+
+namespace ripple {
+namespace test {
+namespace csf {
+/** Proposal is a position taken in the consensus process and is represented
+    directly from the generic types.
+*/
+using Proposal = ConsensusProposal<NodeID, Ledger::ID, TxSet::ID>;
+
+}  // namespace csf
+}  // namespace test
+}  // namespace ripple
+
+#endif

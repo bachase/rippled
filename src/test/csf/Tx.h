@@ -73,6 +73,11 @@ public:
     using ID = beast::uhash<>::result_type;
     using Tx = csf::Tx;
 
+    static ID calcID(TxSetType const & txs)
+    {
+        return beast::uhash<>{}(txs);
+    }
+
     class MutableTxSet
     {
         friend class TxSet;
@@ -98,12 +103,12 @@ public:
     };
 
     TxSet() = default;
-    TxSet(TxSetType const& s) : txs_{s}, id_{beast::uhash<>{}(txs_)}
+    TxSet(TxSetType const& s) : txs_{s}, id_{calcID(txs_)}
     {
     }
 
     TxSet(MutableTxSet && m)
-        : txs_{std::move(m.txs_)}, id_{beast::uhash<>{}(txs_)}
+        : txs_{std::move(m.txs_)}, id_{calcID(txs_)}
     {
     }
 

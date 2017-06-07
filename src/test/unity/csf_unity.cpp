@@ -19,6 +19,7 @@
 
 #include <BeastConfig.h>
 
+#include <test/csf/Histogram_test.cpp>
 #include <test/csf/BasicNetwork_test.cpp>
 #include <test/csf/Scheduler_test.cpp>
 #include <test/csf/impl/UNL.cpp>

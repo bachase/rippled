@@ -20,15 +20,17 @@
 #define RIPPLE_TEST_CSF_PEER_H_INCLUDED
 
 #include <ripple/consensus/Consensus.h>
-#include <ripple/consensus/ConsensusProposal.h>
+
 #include <ripple/consensus/Validations.h>
 #include <boost/container/flat_map.hpp>
 #include <boost/container/flat_set.hpp>
 #include <algorithm>
+#include <test/csf/CollectorRef.h>
+#include <test/csf/Scheduler.h>
 #include <test/csf/Tx.h>
 #include <test/csf/UNL.h>
 #include <test/csf/Validation.h>
-#include <test/csf/Scheduler.h>
+#include <test/csf/events.h>
 #include <test/csf/ledgers.h>
 
 namespace ripple {
@@ -36,16 +38,10 @@ namespace test {
 namespace csf {
 
 namespace bc = boost::container;
-
-/** Proposal is a position taken in the consensus process and is represented
-    directly from the generic types.
-*/
-using Proposal = ConsensusProposal<NodeID, Ledger::ID, TxSet::ID>;
 class PeerPosition
 {
 public:
-    PeerPosition(Proposal const & p)
-        : proposal_(p)
+    PeerPosition(Proposal const& p) : proposal_(p)
     {
     }
 
@@ -123,6 +119,39 @@ struct Peer
         }
     };
 
+    /** Helper to simplify a peer notifying a collector */
+    class WrappedCollector
+    {
+        using clock_type = beast::manual_clock<std::chrono::steady_clock>;
+        CollectorRef collector_;
+        NodeID id_;
+        clock_type& clock_;
+        using Ledger_t = Ledger;
+
+    public:
+        using NodeID_t = NodeID;
+        template <class Collector>
+        WrappedCollector(Collector& collector, NodeID id, clock_type& clock)
+            : collector_{collector}, id_{id}, clock_{clock}
+        {
+        }
+        using TxSet_t = TxSet;
+        WrappedCollector(WrappedCollector const&) = delete;
+        WrappedCollector&
+        operator=(WrappedCollector const&) = delete;
+        using PeerPosition_t = PeerPosition;
+        WrappedCollector(WrappedCollector&&) = default;
+        WrappedCollector&
+        operator=(WrappedCollector&&) = default;
+
+        template <class Event>
+        void
+        on(Event const& e)
+        {
+            collector_.on(id_, clock_.now(), e);
+        }
+    };
+
     using Ledger_t = Ledger;
     using NodeID_t = NodeID;
     using TxSet_t = TxSet;
@@ -142,7 +171,7 @@ struct Peer
     BasicNetwork<Peer*>& net;
 
     //! Scheduler of events
-	Scheduler& scheduler;
+    Scheduler& scheduler;
 
     //! UNL of trusted peers
     UNL unl;
@@ -184,24 +213,37 @@ struct Peer
     std::size_t prevProposers_ = 0;
     std::chrono::milliseconds prevRoundTime_;
 
-	// Quorum of validations needed for a ledger to be fully validated
+    // Quorum of validations needed for a ledger to be fully validated
     // TODO: Use the logic in ValidatorList to set this
 
     std::size_t quorum;
     // Simulation parameters
     ConsensusParms parms_;
 
+    //! The collector to report events to
+    WrappedCollector collector;
+
     //! All peers start from the default constructed ledger
-    Peer(std::uint32_t i, Scheduler & s, LedgerOracle & o, BasicNetwork<Peer*>& n, UNL const& u)
+    template <class Collector>
+    Peer(
+        std::uint32_t i,
+        ConsensusParms p,
+        Scheduler& s,
+        LedgerOracle& o,
+        BasicNetwork<Peer*>& n,
+        UNL const& u,
+        Collector& c)
         : consensus(s.clock(), *this, beast::Journal{})
         , id{i}
         , key{id, 0}
         , oracle{o}
-		, scheduler{s}
+        , scheduler{s}
         , net{n}
         , unl(u)
         , validations{ValidationParms{}, s.clock(), beast::Journal{}, *this}
         , quorum{static_cast<std::size_t>(unl.size() * 0.8)}
+        , parms_{p}
+        , collector{c, id, s.clock()}
     {
         ledgers[lastClosedLedger.get().id()] = lastClosedLedger.get();
     }
@@ -214,7 +256,6 @@ struct Peer
             return &(it->second);
 
         // TODO Get from network properly!
-
         for (auto const& link : net.links(this))
         {
             auto const& p = *link.to;
@@ -234,7 +275,17 @@ struct Peer
         auto it = txSets.find(setId);
         if (it != txSets.end())
             return &(it->second);
-        // TODO Get from network instead!
+        // TODO Get from network properly!
+        for (auto const& link : net.links(this))
+        {
+            auto const& p = *link.to;
+            auto it = p.txSets.find(setId);
+            if (it != p.txSets.end())
+            {
+                auto res = txSets.emplace(setId, it->second);
+                return &res.first->second;
+            }
+        }
         return nullptr;
     }
 
@@ -257,17 +308,22 @@ struct Peer
     }
 
     Result
-    onClose(Ledger const& prevLedger, NetClock::time_point closeTime, ConsensusMode mode)
+    onClose(
+        Ledger const& prevLedger,
+        NetClock::time_point closeTime,
+        ConsensusMode mode)
     {
-        TxSet res{openTxs};
+        collector.on(CloseLedger{prevLedger, openTxs});
 
-        return Result(TxSet{openTxs},
-                      Proposal(prevLedger.id(),
-                               Proposal::seqJoin,
-                               res.id(),
-                               closeTime,
-                               now(),
-                               id));
+        return Result(
+            TxSet{openTxs},
+            Proposal(
+                prevLedger.id(),
+                Proposal::seqJoin,
+                TxSet::calcID(openTxs),
+                closeTime,
+                now(),
+                id));
     }
 
     void
@@ -277,7 +333,7 @@ struct Peer
         NetClock::duration const& closeResolution,
         ConsensusCloseTimes const& rawCloseTimes,
         ConsensusMode const& mode,
-        Json::Value && consensusJson)
+        Json::Value&& consensusJson)
     {
         onAccept(
             result,
@@ -295,7 +351,7 @@ struct Peer
         NetClock::duration const& closeResolution,
         ConsensusCloseTimes const& rawCloseTimes,
         ConsensusMode const& mode,
-        Json::Value && consensusJson)
+        Json::Value&& consensusJson)
     {
         schedule(delays.ledgerAccept, [&]() {
             auto newLedger = oracle.accept(
@@ -304,8 +360,10 @@ struct Peer
                 closeResolution,
                 result.position.closeTime());
             ledgers[newLedger.id()] = newLedger;
-        prevProposers_ = result.proposers;
-        prevRoundTime_ = result.roundTime.read();
+
+            collector.on(AcceptLedger{newLedger, lastClosedLedger.get()});
+            prevProposers_ = result.proposers;
+            prevRoundTime_ = result.roundTime.read();
             lastClosedLedger.switchTo(now(), newLedger);
 
             auto it = std::remove_if(
@@ -375,7 +433,7 @@ struct Peer
 
         if (netLgr != ledgerID)
         {
-            // signal change?
+            collector.on(WrongPrevLedger{ledgerID, netLgr});
         }
         return netLgr;
     }
@@ -383,10 +441,10 @@ struct Peer
     void
     propose(Proposal const& pos)
     {
-            relay(PeerPosition(pos));
+        relay(pos);
     }
 
-    ConsensusParms const &
+    ConsensusParms const&
     parms() const
     {
         return parms_;
@@ -394,10 +452,42 @@ struct Peer
 
     //-------------------------------------------------------------------------
     // non-callback helpers
+
+    // Generic overlay points
+
+    // Receive a message from a specific peer
+    template <class T>
     void
-    receive(PeerPosition const& peerPos)
+    receive(NodeID from, T const& t)
     {
-        Proposal const & p = peerPos.proposal();
+        collector.on(Receive<T>{from, t});
+
+        handle(t);
+    }
+
+    // Relay a message to all connected peers
+    template <class T>
+    void
+    relay(T const& t)
+    {
+        collector.on(Relay<T>{t});
+        for (auto const& link : net.links(this))
+            net.send(this, link.to, [ msg = t, to = link.to, id = this->id ] {
+                to->receive(id, msg);
+            });
+    }
+
+    // Unwrap the peerPosition before relaying
+    void
+    relay(PeerPosition const & p)
+    {
+        relay(p.proposal());
+    }
+
+    // Type specific receive handlers
+    void
+    handle(Proposal const& p)
+    {
         if (unl.find(static_cast<std::uint32_t>(p.nodeID())) == unl.end())
             return;
 
@@ -407,11 +497,11 @@ struct Peer
             return;
 
         dest.push_back(p);
-        consensus.peerProposal(now(), peerPos);
+        consensus.peerProposal(now(), PeerPosition{p});
     }
 
     void
-    receive(TxSet const& txs)
+    handle(TxSet const& txs)
     {
         // save and map complete?
         auto it = txSets.insert(std::make_pair(txs.id(), txs));
@@ -420,7 +510,7 @@ struct Peer
     }
 
     void
-    receive(Tx const& tx)
+    handle(Tx const& tx)
     {
         // Ignore tranasctions already in our ledger
         auto const& lastClosedTxs = lastClosedLedger.get().txs();
@@ -428,7 +518,7 @@ struct Peer
             return;
         // Only relay if it is new to us
         // TODO: Figure out better overlay model to manage relay/flood
-        if(openTxs.insert(tx).second)
+        if (openTxs.insert(tx).second)
             relay(tx);
     }
 
@@ -439,15 +529,14 @@ struct Peer
         v.setSeen(now());
         validations.add(v.key(), v);
 
-        auto it = ledgers.find(v.ledgerID());
-        if (it != ledgers.end())
-            checkFullyValidated(it->second);
-        // TODO:
-        //   else acquire from the network!
+        // Acquire will try to get from network if not already local
+        Ledger const* lgr = acquireLedger(v.ledgerID());
+        if (lgr)
+            checkFullyValidated(*lgr);
     }
 
     void
-    receive(Validation const& v)
+    handle(Validation const& v)
     {
         if (unl.find(static_cast<std::uint32_t>(v.nodeID())) != unl.end())
         {
@@ -456,20 +545,13 @@ struct Peer
         }
     }
 
-    template <class T>
-    void
-    relay(T const& t)
-    {
-        for (auto const& link : net.links(this))
-            net.send(
-                this, link.to, [ msg = t, to = link.to ] { to->receive(msg); });
-    }
-
-    // Receive locally submitted transaction
+    // Receive (handle) a locally submitted transaction
     void
     submit(Tx const& tx)
     {
-        receive(tx);
+        // Received this from ourselves
+        collector.on(Receive<Tx>{id, tx});
+        handle(tx);
     }
 
     void
@@ -491,6 +573,8 @@ struct Peer
 
         Ledger::ID bestLCL =
             getPreferredLedger(lastClosedLedger.get().id(), valDistribution);
+
+        collector.on(StartRound{bestLCL, lastClosedLedger.get()});
 
         // TODO:
         //  - Get dominant peer ledger if no validated available?
@@ -555,10 +639,11 @@ struct Peer
     }
 
     // Not interested in tracking consensus mode
-    void
-    onModeChange(ConsensusMode, ConsensusMode) {}
+    void onModeChange(ConsensusMode, ConsensusMode)
+    {
+    }
 
-	void
+    void
     checkFullyValidated(Ledger const& ledger)
     {
         // Only consider ledgers newer than our last fully validated ledger
@@ -568,6 +653,8 @@ struct Peer
         auto count = validations.numTrustedForLedger(ledger.id());
         if (count >= quorum)
         {
+            collector.on(
+                FullyValidateLedger{ledger, fullyValidatedLedger.get()});
             fullyValidatedLedger.switchTo(now(), ledger);
         }
     }

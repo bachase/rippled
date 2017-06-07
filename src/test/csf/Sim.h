@@ -24,6 +24,7 @@
 #include <test/csf/Scheduler.h>
 #include <test/csf/Peer.h>
 #include <test/csf/UNL.h>
+#include <test/csf/collectors.h>
 
 namespace ripple {
 namespace test {
@@ -31,15 +32,19 @@ namespace csf {
 
 class Sim
 {
+    static NullCollector nullCollector;
 public:
+    using clock_type = beast::manual_clock<std::chrono::steady_clock>;
+    using duration = typename clock_type::duration;
+    using time_point = typename clock_type::time_point;
 
+
+
+public:
     LedgerOracle oracle;
 	Scheduler scheduler;
     BasicNetwork<Peer*> net;
     std::vector<Peer> peers;
-
-    using time_point = BasicNetwork<Peer*>::time_point;
-    using duration = BasicNetwork<Peer*>::duration;
 
     /** Create a simulator for the given trust graph and network topology.
 
@@ -58,16 +63,15 @@ public:
 
         @param g The trust graph between peers.
         @param top The network topology between peers.
-        @param parms Consensus parameters to use in the simulation
 
     */
-    template <class Topology>
-    Sim(ConsensusParms parms, TrustGraph const& g, Topology const& top)
+    template <class Topology, class Collector>
+    Sim(ConsensusParms parms, TrustGraph const& g, Topology const& top, Collector & collector)
         : net{scheduler}
     {
         peers.reserve(g.numPeers());
         for (std::uint32_t i = 0; i < g.numPeers(); ++i)
-            peers.emplace_back(i, scheduler, oracle, net, g.unl(i));
+            peers.emplace_back(i, parms, scheduler, oracle, net, g.unl(i), collector);
 
         for (std::uint32_t i = 0; i < peers.size(); ++i)
         {
@@ -85,6 +89,14 @@ public:
         }
     }
 
+    /** Create a simulator using a NullCollector
+    */
+    template <class Topology>
+    Sim(ConsensusParms parms, TrustGraph const& g, Topology const& top)
+        : Sim(parms, g, top, nullCollector)
+    {
+    }
+
     /** Run consensus protocol to generate the provided number of ledgers.
 
         Has each peer run consensus until it creates `ledgers` more ledgers.
@@ -96,7 +108,7 @@ public:
 
     /** Run consensus for the given duration */
     void
-    run(duration const & dur);
+    run(duration const& dur);
 
     /** Check whether all peers in the network are synchronized.
 
@@ -113,11 +125,10 @@ public:
     */
     std::size_t
     forks() const;
-
 };
 
-}  // csf
-}  // test
-}  // ripple
+}  // namespace csf
+}  // namespace test
+}  // namespace ripple
 
 #endif
