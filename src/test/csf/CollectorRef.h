@@ -20,7 +20,7 @@
 #define RIPPLE_TEST_CSF_COLLECTOREF_H_INCLUDED
 
 #include <test/csf/events.h>
-#include <chrono>
+#include <test/csf/SimTime.h>
 
 namespace ripple {
 namespace test {
@@ -30,7 +30,7 @@ namespace csf {
 
     A collector is any class that implements
 
-        on(NodeID, std::chrono::steady_clock::time_point, Event)
+        on(NodeID, SimTime, Event)
 
     for all events.
 
@@ -65,7 +65,7 @@ namespace csf {
 */
 class CollectorRef
 {
-    using tp = EventTime;
+    using tp = SimTime;
 
     struct ICollector
     {

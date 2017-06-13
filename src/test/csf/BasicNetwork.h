@@ -215,7 +215,6 @@ public:
     void
     bfs(Peer const& start, Function&& f);
 };
-
 //------------------------------------------------------------------------------
 template <class Peer>
 class BasicNetwork<Peer>::link_transform

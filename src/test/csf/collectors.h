@@ -24,13 +24,16 @@
 #include <chrono>
 #include <test/csf/Histogram.h>
 #include <test/csf/events.h>
+#include <test/csf/SimTime.h>
 #include <tuple>
 
 namespace ripple {
 namespace test {
 namespace csf {
 
-
+/** Presents a group of collectors as a single collector which calls each
+    sequentially.
+ */
 template <class... Cs>
 class Collectors
 {
@@ -38,7 +41,7 @@ class Collectors
 
     template <class C, class E>
     static void
-    apply(C & c, NodeID who, EventTime when, E e)
+    apply(C & c, NodeID who, SimTime when, E e)
     {
         c.on(who, when, e);
     }
@@ -48,7 +51,7 @@ class Collectors
     apply(
         std::tuple<Cs&...> & cs,
         NodeID who,
-        EventTime when,
+        SimTime when,
         E e,
         std::index_sequence<Is...>)
     {
@@ -63,12 +66,14 @@ public:
 
      template <class E>
      void
-     on(NodeID who, EventTime when, E e)
+     on(NodeID who, SimTime when, E e)
      {
         apply(cs, who, when, e, std::index_sequence_for<Cs...>{});
      }
 };
 
+/** Group collectors into a single collector which calls each sequentially.
+*/
 template <class... Cs>
 Collectors<Cs...> collectors(Cs&... cs)
 {
@@ -81,7 +86,7 @@ struct NullCollector
 {
     template <class E>
     void
-    on(NodeID, EventTime, E const& e)
+    on(NodeID, SimTime, E const& e)
     {
     }
 };
@@ -91,12 +96,12 @@ struct NullCollector
 struct SimDurationCollector
 {
     bool init = false;
-    EventTime start;
-    EventTime stop;
+    SimTime start;
+    SimTime stop;
 
     template <class E>
     void
-    on(NodeID, EventTime when, E const& e)
+    on(NodeID, SimTime when, E const& e)
     {
         if(!init)
         {
@@ -127,11 +132,11 @@ struct TxCollector
     struct Tracker
     {
         Tx tx;
-        EventTime submitted;
-        boost::optional<EventTime> accepted;
-        boost::optional<EventTime> validated;
+        SimTime submitted;
+        boost::optional<SimTime> accepted;
+        boost::optional<SimTime> validated;
 
-        Tracker(Tx tx_, EventTime submitted_) : tx{tx_}, submitted{submitted_}
+        Tracker(Tx tx_, SimTime submitted_) : tx{tx_}, submitted{submitted_}
         {
         }
     };
@@ -139,19 +144,19 @@ struct TxCollector
     hash_map<Tx::ID, Tracker> txs;
 
 
-    using Hist = Histogram<EventTime::duration>;
+    using Hist = Histogram<SimTime::duration>;
     Hist submitToAccept;
     Hist submitToValidate;
 
     // Ignore most events by default
     template <class E>
     void
-    on(NodeID, EventTime when, E const& e)
+    on(NodeID, SimTime when, E const& e)
     {
     }
 
     void
-    on(NodeID who, EventTime when, Receive<Tx> const& e)
+    on(NodeID who, SimTime when, Receive<Tx> const& e)
     {
         // externally submitted tx has self id
         if (who == e.from)
@@ -166,7 +171,7 @@ struct TxCollector
     }
 
     void
-    on(NodeID who, EventTime when, AcceptLedger const& e)
+    on(NodeID who, SimTime when, AcceptLedger const& e)
     {
         for (auto const& tx : e.ledger.txs())
         {
@@ -183,7 +188,7 @@ struct TxCollector
     }
 
     void
-    on(NodeID who, EventTime when, FullyValidateLedger const& e)
+    on(NodeID who, SimTime when, FullyValidateLedger const& e)
     {
         for (auto const& tx : e.ledger.txs())
         {
@@ -233,10 +238,10 @@ struct LedgerCollector
 
     struct Tracker
     {
-        EventTime accepted;
-        boost::optional<EventTime> fullyValidated;
+        SimTime accepted;
+        boost::optional<SimTime> fullyValidated;
 
-        Tracker(EventTime accepted_) : accepted{accepted_}
+        Tracker(SimTime accepted_) : accepted{accepted_}
         {
         }
     };
@@ -244,7 +249,7 @@ struct LedgerCollector
     hash_map<Ledger::ID, Tracker> ledgers_;
 
 
-    using Hist = Histogram<EventTime::duration>;
+    using Hist = Histogram<SimTime::duration>;
     Hist acceptToFullyValid;
     Hist acceptToAccept;
     Hist fullyValidToFullyValid;
@@ -252,12 +257,12 @@ struct LedgerCollector
     // Ignore most events by default
     template <class E>
     void
-    on(NodeID, EventTime, E const& e)
+    on(NodeID, SimTime, E const& e)
     {
     }
 
     void
-    on(NodeID who, EventTime when, AcceptLedger const& e)
+    on(NodeID who, SimTime when, AcceptLedger const& e)
     {
         // First time this ledger accepted
         if (ledgers_.emplace(e.ledger.id(), Tracker{ when }).second)
@@ -276,7 +281,7 @@ struct LedgerCollector
     }
 
     void
-    on(NodeID who, EventTime when, FullyValidateLedger const& e)
+    on(NodeID who, SimTime when, FullyValidateLedger const& e)
     {
         // ignore jumps
         if (e.prior.id() == e.ledger.parentID())

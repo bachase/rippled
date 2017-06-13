@@ -16,63 +16,23 @@
     OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 //==============================================================================
-#include <BeastConfig.h>
-#include <test/csf/Sim.h>
+
+#ifndef RIPPLE_TEST_CSF_SIMTIME_H_INCLUDED
+#define RIPPLE_TEST_CSF_SIMTIME_H_INCLUDED
+
+#include <ripple/beast/clock/manual_clock.h>
+#include <chrono>
 
 namespace ripple {
 namespace test {
 namespace csf {
 
-NullCollector Sim::nullCollector{};
-
-void
-Sim::run(int ledgers)
-{
-    for (auto& p : peers)
-    {
-        p.targetLedgers = p.completedLedgers + ledgers;
-        p.start();
-    }
-    scheduler.step();
-}
-
-void
-Sim::run(SimDuration const & dur)
-{
-    for (auto& p : peers)
-    {
-        p.targetLedgers = std::numeric_limits<decltype(p.targetLedgers)>::max();
-        p.start();
-    }
-    scheduler.step_for(dur);
-}
-
-bool
-Sim::synchronized() const
-{
-    if (peers.size() < 1)
-        return true;
-    Peer const& ref = peers.front();
-    return std::all_of(peers.begin(), peers.end(), [&ref](Peer const& p) {
-        return p.lastClosedLedger.get().id() ==
-            ref.lastClosedLedger.get().id() &&
-            p.fullyValidatedLedger.get().id() ==
-            ref.fullyValidatedLedger.get().id();
-    });
-}
-
-std::size_t
-Sim::forks() const
-{
-    if(peers.size() < 1)
-        return 0;
-    std::set<Ledger> ledgers;
-    for(auto const & peer : peers)
-        ledgers.insert(peer.fullyValidatedLedger.get());
-
-    return oracle.forks(ledgers);
-}
+using SimClock = beast::manual_clock<std::chrono::steady_clock>;
+using SimDuration = typename SimClock::duration;
+using SimTime = typename SimClock::time_point;
 
 }  // namespace csf
 }  // namespace test
 }  // namespace ripple
+
+#endif

@@ -20,6 +20,7 @@
 #ifndef RIPPLE_TEST_CSF_SIM_H_INCLUDED
 #define RIPPLE_TEST_CSF_SIM_H_INCLUDED
 
+#include <test/csf/SimTime.h>
 #include <test/csf/BasicNetwork.h>
 #include <test/csf/Scheduler.h>
 #include <test/csf/Peer.h>
@@ -33,12 +34,6 @@ namespace csf {
 class Sim
 {
     static NullCollector nullCollector;
-public:
-    using clock_type = beast::manual_clock<std::chrono::steady_clock>;
-    using duration = typename clock_type::duration;
-    using time_point = typename clock_type::time_point;
-
-
 
 public:
     LedgerOracle oracle;
@@ -108,7 +103,7 @@ public:
 
     /** Run consensus for the given duration */
     void
-    run(duration const& dur);
+    run(SimDuration const& dur);
 
     /** Check whether all peers in the network are synchronized.
 

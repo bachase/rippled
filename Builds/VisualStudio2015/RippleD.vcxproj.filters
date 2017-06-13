@@ -5274,6 +5274,12 @@
     <ClInclude Include="..\..\src\test\csf\Sim.h">
       <Filter>test\csf</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\test\csf\SimTime.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\test\csf\submitters.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\test\csf\Tx.h">
       <Filter>test\csf</Filter>
     </ClInclude>
