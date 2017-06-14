@@ -23,6 +23,7 @@
 #include <boost/container/flat_set.hpp>
 #include <ripple/consensus/Consensus.h>
 #include <ripple/consensus/ConsensusProposal.h>
+#include <test/csf/Scheduler.h>
 #include <test/csf/Ledger.h>
 #include <test/csf/Tx.h>
 #include <test/csf/UNL.h>
@@ -165,6 +166,7 @@ struct Peer
 
     //! Handle to network for sending messages
     BasicNetwork<Peer*>& net;
+    Scheduler& scheduler;
 
     //! UNL of trusted peers
     UNL unl;
@@ -201,12 +203,13 @@ struct Peer
     std::chrono::milliseconds prevRoundTime_;
 
     //! All peers start from the default constructed ledger
-    Peer(PeerID i, BasicNetwork<Peer*>& n, UNL const& u, ConsensusParms p)
-        : consensus(n.clock(), *this, beast::Journal{})
+    Peer(PeerID i, Scheduler & s, BasicNetwork<Peer*>& n, UNL const& u, ConsensusParms parms)
+        : consensus(s.clock(), *this, beast::Journal{})
         , id{i}
+        , scheduler{s}
         , net{n}
         , unl(u)
-        , parms_(p)
+        , parms_(parms)
     {
         ledgers[lastClosedLedger.id()] = lastClosedLedger;
     }
@@ -434,12 +437,12 @@ struct Peer
         consensus.timerEntry(now());
         // only reschedule if not completed
         if (completedLedgers < targetLedgers)
-            net.timer(parms().ledgerGRANULARITY, [&]() { timerEntry(); });
+            scheduler.in(parms().ledgerGRANULARITY, [&]() { timerEntry(); });
     }
     void
     start()
     {
-        net.timer(parms().ledgerGRANULARITY, [&]() { timerEntry(); });
+        scheduler.in(parms().ledgerGRANULARITY, [&]() { timerEntry(); });
         // The ID is the one we have seen the most validations for
         // In practice, we might not actually have that ledger itself yet,
         // so there is no gaurantee that bestLCL == lastClosedLedger.id()
@@ -458,7 +461,7 @@ struct Peer
         using namespace std::chrono;
         using namespace std::chrono_literals;
         return NetClock::time_point(duration_cast<NetClock::duration>(
-            net.now().time_since_epoch() + 86400s + clockSkew));
+            scheduler.now().time_since_epoch() + 86400s + clockSkew));
     }
 
     // Schedule the provided callback in `when` duration, but if
@@ -472,7 +475,7 @@ struct Peer
         if (when == 0ns)
             what();
         else
-            net.timer(when, std::forward<T>(what));
+            scheduler.in(when, std::forward<T>(what));
     }
 
     Ledger::ID
