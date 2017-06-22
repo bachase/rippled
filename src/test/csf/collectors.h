@@ -22,9 +22,10 @@
 #include <ripple/basics/UnorderedContainers.h>
 #include <boost/optional.hpp>
 #include <chrono>
+#include <ostream>
 #include <test/csf/Histogram.h>
-#include <test/csf/events.h>
 #include <test/csf/SimTime.h>
+#include <test/csf/events.h>
 #include <tuple>
 
 namespace ripple {
@@ -41,7 +42,7 @@ class Collectors
 
     template <class C, class E>
     static void
-    apply(C & c, NodeID who, SimTime when, E e)
+    apply(C& c, NodeID who, SimTime when, E e)
     {
         c.on(who, when, e);
     }
@@ -49,7 +50,7 @@ class Collectors
     template <std::size_t... Is, class E>
     static void
     apply(
-        std::tuple<Cs&...> & cs,
+        std::tuple<Cs&...>& cs,
         NodeID who,
         SimTime when,
         E e,
@@ -60,22 +61,25 @@ class Collectors
         (void)std::array<int, sizeof...(Cs)>{
             {((apply(std::get<Is>(cs), who, when, e)), 0)...}};
     }
-public:
-    Collectors(Cs&... cs)
-     : cs(std::tie(cs...)) {}
 
-     template <class E>
-     void
-     on(NodeID who, SimTime when, E e)
-     {
+public:
+    Collectors(Cs&... cs) : cs(std::tie(cs...))
+    {
+    }
+
+    template <class E>
+    void
+    on(NodeID who, SimTime when, E e)
+    {
         apply(cs, who, when, e, std::index_sequence_for<Cs...>{});
-     }
+    }
 };
 
 /** Group collectors into a single collector which calls each sequentially.
-*/
+ */
 template <class... Cs>
-Collectors<Cs...> collectors(Cs&... cs)
+Collectors<Cs...>
+collectors(Cs&... cs)
 {
     return Collectors<Cs...>(cs...);
 }
@@ -92,7 +96,7 @@ struct NullCollector
 };
 
 /** Tracks the overal duration of a simulation
-*/
+ */
 struct SimDurationCollector
 {
     bool init = false;
@@ -103,7 +107,7 @@ struct SimDurationCollector
     void
     on(NodeID, SimTime when, E const& e)
     {
-        if(!init)
+        if (!init)
         {
             start = when;
             init = true;
@@ -143,7 +147,6 @@ struct TxCollector
 
     hash_map<Tx::ID, Tracker> txs;
 
-
     using Hist = Histogram<SimTime::duration>;
     Hist submitToAccept;
     Hist submitToValidate;
@@ -165,7 +168,6 @@ struct TxCollector
             if (txs.emplace(e.val.id(), Tracker{e.val, when}).second)
             {
                 submitted++;
-
             }
         }
     }
@@ -178,7 +180,7 @@ struct TxCollector
             auto it = txs.find(tx.id());
             if (it != txs.end() && !it->second.accepted)
             {
-                Tracker & tracker = it->second;
+                Tracker& tracker = it->second;
                 tracker.accepted = when;
                 accepted++;
 
@@ -195,7 +197,7 @@ struct TxCollector
             auto it = txs.find(tx.id());
             if (it != txs.end() && !it->second.validated)
             {
-                Tracker & tracker = it->second;
+                Tracker& tracker = it->second;
                 // Should only validated a previously accepted Tx
                 assert(tracker.accepted);
 
@@ -248,7 +250,6 @@ struct LedgerCollector
 
     hash_map<Ledger::ID, Tracker> ledgers_;
 
-
     using Hist = Histogram<SimTime::duration>;
     Hist acceptToFullyValid;
     Hist acceptToAccept;
@@ -265,7 +266,7 @@ struct LedgerCollector
     on(NodeID who, SimTime when, AcceptLedger const& e)
     {
         // First time this ledger accepted
-        if (ledgers_.emplace(e.ledger.id(), Tracker{ when }).second)
+        if (ledgers_.emplace(e.ledger.id(), Tracker{when}).second)
         {
             ++accepted;
             // ignore jumps?
@@ -318,11 +319,41 @@ struct LedgerCollector
                 return !it.second.fullyValidated;
             });
     }
-
 };
 
 // Add LedgerJump collector?
 
+/** Write out stream of ledger activity
+
+    Writes information about every accepted and fully-validated ledger to a
+    provided std::ostream.
+*/
+struct StreamCollector
+{
+    std::ostream& out;
+
+    // Ignore most events by default
+    template <class E>
+    void
+    on(NodeID, SimTime, E const& e)
+    {
+    }
+
+    void
+    on(NodeID who, SimTime when, AcceptLedger const& e)
+    {
+        out << when.time_since_epoch().count() << ": Node " << who << " accepted "
+            << "L" << e.ledger.id() << " " << e.ledger.txs() << "\n";
+    }
+
+    void
+    on(NodeID who, SimTime when, FullyValidateLedger const& e)
+    {
+        out << when.time_since_epoch().count() << ": Node " << who
+            << " fully-validated " << "L"<< e.ledger.id() << " " << e.ledger.txs()
+            << "\n";
+    }
+};
 
 }  // namespace csf
 }  // namespace test

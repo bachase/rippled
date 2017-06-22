@@ -25,8 +25,8 @@ namespace ripple {
 namespace test {
 namespace csf {
 
-bool
-TrustGraph::canFork(double quorum) const
+std::vector<TrustGraph::ForkInfo>
+TrustGraph::forkablePairs(double quorum) const
 {
     // Check the forking condition by looking at intersection
     // between all pairs of UNLs.
@@ -47,6 +47,7 @@ TrustGraph::canFork(double quorum) const
         }
     }
 
+    std::vector<ForkInfo> res;
     // Loop over all pairs of uniqueUNLs
     for (int i = 0; i < uniqueUNLs.size(); ++i)
     {
@@ -64,10 +65,17 @@ TrustGraph::canFork(double quorum) const
                 });
 
             if (intersectionSize < rhs)
-                return true;
+            {
+                res.emplace_back(ForkInfo{i, j, intersectionSize, rhs});
+            }
         }
     }
-    return false;
+    return res;
+}
+bool
+TrustGraph::canFork(double quorum) const
+{
+    return !forkablePairs(quorum).empty();
 }
 
 TrustGraph

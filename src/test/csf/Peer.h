@@ -241,7 +241,7 @@ struct Peer
         , net{n}
         , unl(u)
         , validations{ValidationParms{}, s.clock(), beast::Journal{}, *this}
-        , quorum{static_cast<std::size_t>(unl.size() * 0.8)}
+        , quorum{static_cast<std::size_t>(std::ceil(unl.size() * 0.8))}
         , parms_{p}
         , collector{c, id, s.clock()}
     {
@@ -354,9 +354,10 @@ struct Peer
         Json::Value&& consensusJson)
     {
         schedule(delays.ledgerAccept, [&]() {
+            TxSet const acceptedTxs = injectTxs(prevLedger, result.set);
             auto newLedger = oracle.accept(
                 prevLedger,
-                result.set.txs(),
+                acceptedTxs.txs(),
                 closeResolution,
                 result.position.closeTime());
             ledgers[newLedger.id()] = newLedger;
@@ -368,7 +369,7 @@ struct Peer
 
             auto it = std::remove_if(
                 openTxs.begin(), openTxs.end(), [&](Tx const& tx) {
-                    return result.set.exists(tx.id());
+                    return acceptedTxs.exists(tx.id());
                 });
             openTxs.erase(it, openTxs.end());
 
@@ -647,7 +648,7 @@ struct Peer
     checkFullyValidated(Ledger const& ledger)
     {
         // Only consider ledgers newer than our last fully validated ledger
-        if (ledger.seq() < fullyValidatedLedger.get().seq())
+        if (ledger.seq() <= fullyValidatedLedger.get().seq())
             return;
 
         auto count = validations.numTrustedForLedger(ledger.id());
@@ -657,6 +658,27 @@ struct Peer
                 FullyValidateLedger{ledger, fullyValidatedLedger.get()});
             fullyValidatedLedger.switchTo(now(), ledger);
         }
+    }
+
+
+    // Injects a specific transaction when generating the ledger following
+    // the provided sequence.  This allows simulating a byzantine failure in
+    // which a node generates the wrong ledger, even when consensus worked
+    // properly.
+    hash_map<Ledger::Seq, Tx> txInjections;
+
+    TxSet
+    injectTxs(Ledger prevLedger, TxSet const & src)
+    {
+        auto const it = txInjections.find(prevLedger.seq());
+
+        if(it == txInjections.end())
+            return src;
+        TxSetType res{src.txs()};
+        res.insert(it->second);
+
+        return TxSet{res};
+
     }
 };
 

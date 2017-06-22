@@ -125,6 +125,18 @@ public:
         return UNLs_[assignment_[i]];
     }
 
+    struct ForkInfo
+    {
+        int nodeA;
+        int nodeB;
+        int overlap;
+        double required;
+    };
+
+    //< Return pairs of nodes that fail the no forking condition
+    std::vector<ForkInfo>
+    forkablePairs(double quorum) const;
+
     //< Check whether this trust graph satisfies the no forking condition
     bool
     canFork(double quorum) const;
