@@ -167,11 +167,11 @@ struct Peer
     //! The oracle that manages unique ledgers
     LedgerOracle& oracle;
 
-    //! Handle to network for sending messages
-    BasicNetwork<Peer*>& net;
-
     //! Scheduler of events
     Scheduler& scheduler;
+
+    //! Handle to network for sending messages
+    BasicNetwork<Peer*>& net;
 
     //! UNL of trusted peers
     UNL unl;
