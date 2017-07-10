@@ -119,7 +119,7 @@ public:
         auto tg = TrustGraph::makeComplete(1);
         ConsensusParms parms;
         Sim s(parms, tg, topology(tg, fixed{parms.ledgerGRANULARITY}));
-
+        s.sink.threshold(beast::severities::kTrace);
         auto& p = s.peers[0];
 
         p.targetLedgers = 1;

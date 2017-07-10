@@ -20,7 +20,7 @@
 #define RIPPLE_TEST_CSF_PEER_H_INCLUDED
 
 #include <ripple/consensus/Consensus.h>
-
+#include <ripple/beast/utility/WrappedSink.h>
 #include <ripple/consensus/Validations.h>
 #include <boost/container/flat_map.hpp>
 #include <boost/container/flat_set.hpp>
@@ -158,6 +158,9 @@ struct Peer
     using PeerPosition_t = PeerPosition;
     using Result = ConsensusResult<Peer>;
 
+    beast::WrappedSink sink;
+    beast::Journal j;
+
     Consensus<Peer> consensus;
 
     //! Our unique ID and current signing key
@@ -232,15 +235,18 @@ struct Peer
         LedgerOracle& o,
         BasicNetwork<Peer*>& n,
         UNL const& u,
-        Collector& c)
-        : consensus(s.clock(), *this, beast::Journal{})
+        Collector& c,
+        beast::Journal jIn)
+        : sink(jIn, "Peer " + std::to_string(i) + ": ")
+        , j(sink)
+        , consensus(s.clock(), *this, j)
         , id{i}
         , key{id, 0}
         , oracle{o}
         , scheduler{s}
         , net{n}
         , unl(u)
-        , validations{ValidationParms{}, s.clock(), beast::Journal{}, *this}
+        , validations{ValidationParms{}, s.clock(), j, *this}
         , quorum{static_cast<std::size_t>(std::ceil(unl.size() * 0.8))}
         , parms_{p}
         , collector{c, id, s.clock()}

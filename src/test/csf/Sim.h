@@ -27,17 +27,45 @@
 #include <test/csf/UNL.h>
 #include <test/csf/collectors.h>
 
+#include <iostream>
 namespace ripple {
 namespace test {
 namespace csf {
+
+
+class BasicSink : public beast::Journal::Sink
+{
+    Scheduler::clock_type const & clock_;
+public:
+    BasicSink (Scheduler::clock_type const & clock)
+        : Sink (beast::severities::kDisabled, false)
+        , clock_{clock}
+    {
+    }
+
+    void
+    write (beast::severities::Severity level,
+        std::string const& text) override
+    {
+        if (level < threshold())
+            return;
+
+        std::cout << clock_.now().time_since_epoch().count() << " " << text
+                  << std::endl;
+    }
+};
 
 class Sim
 {
     static NullCollector nullCollector;
 
 public:
+    Scheduler scheduler;
+    BasicSink sink;
+    beast::Journal j;
+
     LedgerOracle oracle;
-	Scheduler scheduler;
+
     BasicNetwork<Peer*> net;
     std::vector<Peer> peers;
 
@@ -62,11 +90,11 @@ public:
     */
     template <class Topology, class Collector>
     Sim(ConsensusParms parms, TrustGraph const& g, Topology const& top, Collector & collector)
-        : net{scheduler}
+        : sink{scheduler.clock()}, j{sink}, net{scheduler}
     {
         peers.reserve(g.numPeers());
         for (std::uint32_t i = 0; i < g.numPeers(); ++i)
-            peers.emplace_back(i, parms, scheduler, oracle, net, g.unl(i), collector);
+            peers.emplace_back(i, parms, scheduler, oracle, net, g.unl(i), collector, j);
 
         for (std::uint32_t i = 0; i < peers.size(); ++i)
         {
