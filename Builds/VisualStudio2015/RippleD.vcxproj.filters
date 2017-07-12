@@ -5283,6 +5283,12 @@
     <ClCompile Include="..\..\src\test\csf\BasicNetwork_test.cpp">
       <Filter>test\csf</Filter>
     </ClCompile>
+    <ClInclude Include="..\..\src\test\csf\Digraph.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
+    <ClCompile Include="..\..\src\test\csf\Digraph_test.cpp">
+      <Filter>test\csf</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\csf\impl\UNL.cpp">
       <Filter>test\csf\impl</Filter>
     </ClCompile>
