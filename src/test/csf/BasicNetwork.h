@@ -20,9 +20,8 @@
 #ifndef RIPPLE_TEST_CSF_BASICNETWORK_H_INCLUDED
 #define RIPPLE_TEST_CSF_BASICNETWORK_H_INCLUDED
 
-#include <ripple/beast/hash/hash_append.h>
-#include <ripple/beast/hash/uhash.h>
-#include <boost/container/flat_map.hpp>
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/labeled_graph.hpp>
 #include <boost/range/adaptor/transformed.hpp>
 #include <boost/range/iterator_range.hpp>
 #include <cassert>
@@ -107,13 +106,19 @@ public:
         }
     };
 
-private:
-    using links_type = boost::container::flat_map<Peer, link_type>;
+    using graph_type = boost::adjacency_list<
+        boost::setS,
+        boosst::vecS,
+        boost::directedS,
+        Peer,
+        link_type>;
 
-    class link_transform;
+    using labeled_graph_type = boost::labeled_graph<graph_type, Vertex>:
+
+private:
 
     Scheduler& scheduler;
-    std::unordered_map<Peer, links_type> links_;
+    labeled_graph_type links_;
 
 public:
     BasicNetwork(BasicNetwork const&) = delete;
