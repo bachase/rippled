@@ -5247,6 +5247,9 @@
     <ClCompile Include="..\..\src\test\consensus\Consensus_test.cpp">
       <Filter>test\consensus</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\consensus\DistributedValidators_test.cpp">
+      <Filter>test\consensus</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\consensus\LedgerTiming_test.cpp">
       <Filter>test\consensus</Filter>
     </ClCompile>

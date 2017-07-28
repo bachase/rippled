@@ -20,6 +20,7 @@
 #include <test/consensus/ByzantineFailureSim_test.cpp>
 #include <test/consensus/ClockSkewSim_test.cpp>
 #include <test/consensus/Consensus_test.cpp>
+#include <test/consensus/DistributedValidators_test.cpp>
 #include <test/consensus/LedgerTiming_test.cpp>
 #include <test/consensus/ScaleFreeSim_test.cpp>
 #include <test/consensus/Validations_test.cpp>

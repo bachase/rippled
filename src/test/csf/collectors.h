@@ -252,7 +252,7 @@ struct TxCollector
 
     template <class T>
     void
-    report(SimDuration simDuration, T& log)
+    report(SimDuration simDuration, T& log, bool printBreakline = false)
     {
         using namespace std::chrono;
         auto perSec = [&simDuration](std::size_t count)
@@ -265,11 +265,18 @@ struct TxCollector
             return duration_cast<duration<float>>(dur).count();
         };
 
-
-        log << "Transaction Statistics" << std::endl;
+        if (printBreakline)
+        {
+            log << std::setw(11) << std::setfill('-') << "-" <<  "-"
+                << std::setw(7) << std::setfill('-') << "-" <<  "-"
+                << std::setw(7) << std::setfill('-') << "-" <<  "-"
+                << std::setw(36) << std::setfill('-') << "-"
+                << std::endl;
+            log << std::setfill(' ');
+        }
 
         log << std::left
-            << std::setw(11) << "Name" <<  "|"
+            << std::setw(11) << "TxStats" <<  "|"
             << std::setw(7) << "Count" <<  "|"
             << std::setw(7) << "Per Sec" <<  "|"
             << std::setw(15) << "Latency (sec)"
@@ -330,7 +337,12 @@ struct TxCollector
             << std::setw(7) << "" << "|"
             << std::setw(43) << std::endl;
 
-        log << std::endl;
+        log << std::setw(11) << std::setfill('-') << "-" <<  "-"
+            << std::setw(7) << std::setfill('-') << "-" <<  "-"
+            << std::setw(7) << std::setfill('-') << "-" <<  "-"
+            << std::setw(36) << std::setfill('-') << "-"
+            << std::endl;
+        log << std::setfill(' ');
     }
 
     template <class T, class Tag>
@@ -497,7 +509,7 @@ struct LedgerCollector
 
     template <class T>
     void
-    report(SimDuration simDuration, T& log)
+    report(SimDuration simDuration, T& log, bool printBreakline = false)
     {
         using namespace std::chrono;
         auto perSec = [&simDuration](std::size_t count)
@@ -510,10 +522,18 @@ struct LedgerCollector
             return duration_cast<duration<float>>(dur).count();
         };
 
-        log << std::left << "Ledger statistics " << std::endl;
+        if (printBreakline)
+        {
+            log << std::setw(11) << std::setfill('-') << "-" <<  "-"
+                << std::setw(7) << std::setfill('-') << "-" <<  "-"
+                << std::setw(7) << std::setfill('-') << "-" <<  "-"
+                << std::setw(36) << std::setfill('-') << "-"
+                << std::endl;
+            log << std::setfill(' ');
+        }
 
         log << std::left
-            << std::setw(11) << "Name" <<  "|"
+            << std::setw(11) << "LedgerStats" <<  "|"
             << std::setw(7)  << "Count" <<  "|"
             << std::setw(7)  << "Per Sec" <<  "|"
             << std::setw(15) << "Latency (sec)"
@@ -523,6 +543,13 @@ struct LedgerCollector
             << std::setw(7) << "90-ile"
             << std::left
             << std::endl;
+
+        log << std::setw(11) << std::setfill('-') << "-" <<  "|"
+            << std::setw(7) << std::setfill('-') << "-" <<  "|"
+            << std::setw(7) << std::setfill('-') << "-" <<  "|"
+            << std::setw(36) << std::setfill('-') << "-"
+            << std::endl;
+        log << std::setfill(' ');
 
          log << std::left
             << std::setw(11) << "Accept " << "|"
@@ -545,6 +572,13 @@ struct LedgerCollector
             << std::setw(7) << std::setprecision(2) << fmtS(fullyValidToFullyValid.percentile(0.5f))
             << std::setw(7) << std::setprecision(2) << fmtS(fullyValidToFullyValid.percentile(0.9f))
             << std::endl;
+
+        log << std::setw(11) << std::setfill('-') << "-" <<  "-"
+            << std::setw(7) << std::setfill('-') << "-" <<  "-"
+            << std::setw(7) << std::setfill('-') << "-" <<  "-"
+            << std::setw(36) << std::setfill('-') << "-"
+            << std::endl;
+        log << std::setfill(' ');
     }
 
     template <class T, class Tag>

@@ -78,7 +78,8 @@ class Selector
     Generator g_;
 
 public:
-    Selector(RAIter first, RAIter last, std::vector<double>& w, Generator& g)
+    Selector(RAIter first, RAIter last, std::vector<double> const& w,
+            Generator& g)
       : first_{first}, last_{last}, dd_{w.begin(), w.end()}, g_{g}
     {
         using tag = typename std::iterator_traits<RAIter>::iterator_category;
@@ -98,7 +99,7 @@ public:
 
 template <typename Iter, typename Generator>
 Selector<Iter,Generator>
-selector(Iter first, Iter last, std::vector<double>& w, Generator& g)
+selector(Iter first, Iter last, std::vector<double> const& w, Generator& g)
 {
     return Selector<Iter, Generator>(first, last, w, g);
 }
