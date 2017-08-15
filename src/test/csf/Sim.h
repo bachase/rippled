@@ -87,7 +87,7 @@ public:
         for (auto& p : peers)
         {
             if (p.completedLedgers == 0)
-                p.relay(Validation{p.id, p.prevLedgerID(), p.prevLedgerID()});
+                p.share(Validation{p.id, p.prevLedgerID(), p.prevLedgerID()});
             p.targetLedgers = p.completedLedgers + ledgers;
             p.start();
         }

@@ -328,7 +328,7 @@ struct Peer
         openTxs.erase(it, openTxs.end());
 
         if (validating_)
-            relay(Validation{id, newLedger.id(), newLedger.parentID()});
+            share(Validation{id, newLedger.id(), newLedger.parentID()});
 
         // kick off the next round...
         // in the actual implementation, this passes back through
@@ -358,7 +358,7 @@ struct Peer
     propose(Proposal const& pos)
     {
         if (proposing_)
-            relay(PeerPosition(pos));
+            share(PeerPosition(pos));
     }
 
     ConsensusParms const &
@@ -400,8 +400,8 @@ struct Peer
         if (openTxs.find(tx.id()) == openTxs.end())
         {
             openTxs.insert(tx);
-            // relay to peers???
-            relay(tx);
+            // share to peers???
+            share(tx);
         }
     }
 
@@ -416,19 +416,19 @@ struct Peer
 
     template <class T>
     void
-    relay(T const& t)
+    share(T const& t)
     {
         for (auto const& link : net.links(this))
             net.send(
                 this, link.target, [ msg = t, to = link.target ] { to->receive(msg); });
     }
 
-    // Receive and relay locally submitted transaction
+    // Receive and share locally submitted transaction
     void
     submit(Tx const& tx)
     {
         receive(tx);
-        relay(tx);
+        share(tx);
     }
 
     void

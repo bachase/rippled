@@ -48,9 +48,11 @@ namespace csf {
 class Ledger
 {
 public:
+    using Seq = std::uint32_t;
+
     struct ID
     {
-        std::uint32_t seq = 0;
+        Seq seq = 0;
         TxSetType txs = TxSetType{};
 
         bool
