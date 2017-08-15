@@ -20,18 +20,8 @@
 #ifndef RIPPLE_TEST_CSF_BASICNETWORK_H_INCLUDED
 #define RIPPLE_TEST_CSF_BASICNETWORK_H_INCLUDED
 
-#include <ripple/beast/hash/hash_append.h>
-#include <ripple/beast/hash/uhash.h>
-#include <boost/container/flat_map.hpp>
-#include <boost/range/adaptor/transformed.hpp>
-#include <boost/range/iterator_range.hpp>
-#include <cassert>
-#include <cstdint>
-#include <deque>
 #include <test/csf/Scheduler.h>
-#include <type_traits>
-#include <unordered_map>
-#include <unordered_set>
+#include <test/csf/Digraph.h>
 
 namespace ripple {
 namespace test {
@@ -66,6 +56,11 @@ namespace csf {
     connections, the caller uses the scheduler's step_* functions
     to drive messages through the network.
 
+    The graph of peers and connections is internally represented
+    using Digraph<Peer,BasicNetwork::link_type>. Clients have
+    const access to that graph to perform additional operations not
+    directly provided by BasicNetwork.
+
     Peer Requirements:
 
         Peer should be a lightweight type, cheap to copy
@@ -87,7 +82,6 @@ namespace csf {
 template <class Peer>
 class BasicNetwork
 {
-public:
     using peer_type = Peer;
 
     using clock_type = Scheduler::clock_type;
@@ -96,7 +90,6 @@ public:
 
     using time_point = typename clock_type::time_point;
 
-private:
     struct link_type
     {
         bool inbound = false;
@@ -109,12 +102,8 @@ private:
         }
     };
 
-    using links_type = boost::container::flat_map<Peer, link_type>;
-
-    class link_transform;
-
     Scheduler& scheduler;
-    std::unordered_map<Peer, links_type> links_;
+    Digraph<Peer, link_type> links_;
 
 public:
     BasicNetwork(BasicNetwork const&) = delete;
@@ -166,13 +155,6 @@ public:
     bool
     disconnect(Peer const& peer1, Peer const& peer2);
 
-    /** Return the range of active links.
-
-        @return A random access range.
-    */
-    boost::transformed_range<link_transform, links_type>
-    links(Peer const& from);
-
     /** Send a message to a peer.
 
         Preconditions:
@@ -195,76 +177,25 @@ public:
     void
     send(Peer const& from, Peer const& to, Function&& f);
 
-    /** Perform breadth-first search.
 
-        Function will be called with this signature:
+    /** Return the range of active links.
 
-            void(std::size_t, Peer&);
-
-        The second argument is the distance of the
-        peer from the start peer, in hops.
+        @return A random access range over Digraph::Edge instances
     */
-    template <class Function>
-    void
-    bfs(Peer const& start, Function&& f);
-};
-
-//------------------------------------------------------------------------------
-template <class Peer>
-class BasicNetwork<Peer>::link_transform
-{
-private:
-    BasicNetwork& net_;
-    Peer from_;
-
-public:
-    using argument_type = typename links_type::value_type;
-
-    class result_type
+    auto
+    links(Peer const& from)
     {
-    public:
-        Peer to;
-        bool inbound;
-
-        result_type(result_type const&) = default;
-
-        result_type(
-            BasicNetwork& net,
-            Peer const& from,
-            Peer const& to_,
-            bool inbound_)
-            : to(to_), inbound(inbound_), net_(net), from_(from)
-        {
-        }
-
-        /** Disconnect this link.
-
-            Effects:
-
-                The connection is removed at both ends.
-        */
-        bool
-        disconnect() const
-        {
-            return net_.disconnect(from_, to);
-        }
-
-    private:
-        BasicNetwork& net_;
-        Peer from_;
-    };
-
-    link_transform(BasicNetwork& net, Peer const& from) : net_(net), from_(from)
-    {
+        return links_.outEdges(from);
     }
 
-    result_type const
-    operator()(argument_type const& v) const
+    /** Return the underlying digraph
+    */
+    Digraph<Peer, link_type> const &
+    graph() const
     {
-        return result_type(net_, from_, v.first, v.second.inbound);
+        return links_;
     }
 };
-
 //------------------------------------------------------------------------------
 template <class Peer>
 BasicNetwork<Peer>::BasicNetwork(Scheduler& s) : scheduler(s)
@@ -272,6 +203,7 @@ BasicNetwork<Peer>::BasicNetwork(Scheduler& s) : scheduler(s)
 }
 
 template <class Peer>
+inline
 bool
 BasicNetwork<Peer>::connect(
     Peer const& from,
@@ -280,83 +212,47 @@ BasicNetwork<Peer>::connect(
 {
     if (to == from)
         return false;
-    using namespace std;
     time_point const now = scheduler.now();
-    if (!links_[from].emplace(to, link_type{false, delay, now}).second)
+    if(!links_.connect(from, to, link_type{false, delay, now}))
         return false;
-    auto const result = links_[to].emplace(from, link_type{true, delay, now});
+    auto const result = links_.connect(to, from, link_type{true, delay, now});
     (void)result;
-    assert(result.second);
+    assert(result);
     return true;
 }
 
 template <class Peer>
+inline
 bool
 BasicNetwork<Peer>::disconnect(Peer const& peer1, Peer const& peer2)
 {
-    if (links_[peer1].erase(peer2) == 0)
+    if (! links_.disconnect(peer1, peer2))
         return false;
-    auto const n = links_[peer2].erase(peer1);
-    (void)n;
-    assert(n);
+    bool r = links_.disconnect(peer2, peer1);
+    (void)r;
+    assert(r);
     return true;
 }
 
-template <class Peer>
-inline auto
-BasicNetwork<Peer>::links(Peer const& from)
-    -> boost::transformed_range<link_transform, links_type>
-{
-    return boost::adaptors::transform(
-        links_[from], link_transform{*this, from});
-}
 
 template <class Peer>
 template <class Function>
 inline void
 BasicNetwork<Peer>::send(Peer const& from, Peer const& to, Function&& f)
 {
-    auto const iter = links_[from].find(to);
-    if (iter != links_[from].end())
-    {
-        time_point sent = scheduler.now();
-        scheduler.in(
-        iter->second.delay,
+    auto link = links_.edge(from,to);
+    if(!link)
+        return;
+    time_point const sent = scheduler.now();
+    scheduler.in(
+        link->delay,
         [ from, to, sent, f = std::forward<Function>(f), this ] {
             // only process if still connected and connection was
             // not broken since the message was sent
-            auto const iter = links_[from].find(to);
-            if (iter != links_[from].end() && iter->second.established <= sent)
+            auto link = links_.edge(from, to);
+            if (link && link->established <= sent)
                 f();
         });
-    }
-
-}
-
-template <class Peer>
-template <class Function>
-void
-BasicNetwork<Peer>::bfs(Peer const& start, Function&& f)
-{
-    std::deque<std::pair<Peer, std::size_t>> q;
-    std::unordered_set<Peer> seen;
-    q.emplace_back(start, 0);
-    seen.insert(start);
-    while (!q.empty())
-    {
-        auto v = q.front();
-        q.pop_front();
-        f(v.second, v.first);
-        for (auto const& link : links_[v.first])
-        {
-            auto const& w = link.first;
-            if (seen.count(w) == 0)
-            {
-                q.emplace_back(w, v.second + 1);
-                seen.insert(w);
-            }
-        }
-    }
 }
 
 }  // namespace csf

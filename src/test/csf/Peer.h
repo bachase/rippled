@@ -225,7 +225,7 @@ struct Peer
 
         for (auto const& link : net.links(this))
         {
-            auto const& p = *link.to;
+            auto const& p = *link.target;
             auto it = p.ledgers.find(ledgerHash);
             if (it != p.ledgers.end())
             {
@@ -420,7 +420,7 @@ struct Peer
     {
         for (auto const& link : net.links(this))
             net.send(
-                this, link.to, [ msg = t, to = link.to ] { to->receive(msg); });
+                this, link.target, [ msg = t, to = link.target ] { to->receive(msg); });
     }
 
     // Receive and relay locally submitted transaction

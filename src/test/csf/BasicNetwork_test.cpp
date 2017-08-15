@@ -51,7 +51,7 @@ public:
             if (id == 0)
             {
                 for (auto const& link : net.links(this))
-                    net.send(this, link.to, [&, to = link.to ] {
+                    net.send(this, link.target, [&, to = link.target ] {
                         to->receive(net, this, 1);
                     });
             }
@@ -70,7 +70,7 @@ public:
             if (m < 5)
             {
                 for (auto const& link : net.links(this))
-                    net.send(this, link.to, [&, mm = m, to = link.to ] {
+                    net.send(this, link.target, [&, mm = m, to = link.target ] {
                         to->receive(net, this, mm);
                     });
             }
@@ -91,10 +91,6 @@ public:
         BEAST_EXPECT(net.connect(&pv[0], &pv[1], 1s));
         BEAST_EXPECT(net.connect(&pv[1], &pv[2], 1s));
         BEAST_EXPECT(!net.connect(&pv[0], &pv[1]));
-        std::size_t diameter = 0;
-        net.bfs(
-            &pv[0], [&](auto d, Peer*) { diameter = std::max(d, diameter); });
-        BEAST_EXPECT(diameter == 2);
         for (auto& peer : pv)
             peer.start(scheduler, net);
         BEAST_EXPECT(scheduler.step_for(0s));
@@ -111,7 +107,7 @@ public:
             auto const links = net.links(&pv[1]);
             if (links.empty())
                 break;
-            BEAST_EXPECT(links[0].disconnect());
+            BEAST_EXPECT(net.disconnect(&pv[1], links[0].target));
         }
         BEAST_EXPECT(pv[0].set == std::set<int>({0, 2, 4}));
         BEAST_EXPECT(pv[1].set == std::set<int>({1, 3}));

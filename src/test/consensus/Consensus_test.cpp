@@ -693,7 +693,7 @@ public:
                 // Nodes have only seen transactions from their neighbors
                 p.openTxs.insert(Tx{p.id});
                 for (auto const link : sim.net.links(&p))
-                    p.openTxs.insert(Tx{link.to->id});
+                    p.openTxs.insert(Tx{link.target->id});
             }
             sim.run(1);
 
