@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
-    Copyright (c) 2012-2017 Ripple Labs Inc.
+    Copyright (c) 2012-2017 Ripple Labs Inc
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -16,12 +16,24 @@
     OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 //==============================================================================
+#ifndef RIPPLE_TEST_CSF_PROPOSAL_H_INCLUDED
+#define RIPPLE_TEST_CSF_PROPOSAL_H_INCLUDED
 
-#include <BeastConfig.h>
+#include <ripple/consensus/ConsensusProposal.h>
+#include <test/csf/ledgers.h>
+#include <test/csf/Tx.h>
+#include <test/csf/Validation.h>
 
-#include <test/csf/Digraph_test.cpp>
-#include <test/csf/Histogram_test.cpp>
-#include <test/csf/BasicNetwork_test.cpp>
-#include <test/csf/Scheduler_test.cpp>
-#include <test/csf/impl/ledgers.cpp>
-#include <test/csf/impl/Sim.cpp>
+namespace ripple {
+namespace test {
+namespace csf {
+/** Proposal is a position taken in the consensus process and is represented
+    directly from the generic types.
+*/
+using Proposal = ConsensusProposal<PeerID, Ledger::ID, TxSet::ID>;
+
+}  // namespace csf
+}  // namespace test
+}  // namespace ripple
+
+#endif

@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
-    Copyright (c) 2012-2017 Ripple Labs Inc.
+    Copyright (c) 2012-2017 Ripple Labs Inc
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -17,11 +17,26 @@
 */
 //==============================================================================
 
-#include <BeastConfig.h>
+#ifndef RIPPLE_TEST_CSF_SIMTIME_H_INCLUDED
+#define RIPPLE_TEST_CSF_SIMTIME_H_INCLUDED
 
-#include <test/csf/Digraph_test.cpp>
-#include <test/csf/Histogram_test.cpp>
-#include <test/csf/BasicNetwork_test.cpp>
-#include <test/csf/Scheduler_test.cpp>
-#include <test/csf/impl/ledgers.cpp>
-#include <test/csf/impl/Sim.cpp>
+#include <ripple/beast/clock/manual_clock.h>
+#include <chrono>
+
+namespace ripple {
+namespace test {
+namespace csf {
+
+using RealClock = std::chrono::system_clock;
+using RealDuration = RealClock::duration;
+using RealTime = RealClock::time_point;
+
+using SimClock = beast::manual_clock<std::chrono::steady_clock>;
+using SimDuration = typename SimClock::duration;
+using SimTime = typename SimClock::time_point;
+
+}  // namespace csf
+}  // namespace test
+}  // namespace ripple
+
+#endif

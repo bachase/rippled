@@ -243,7 +243,7 @@ public:
     saveDot(std::string const& fileName, VertexName&& vertexName) const
     {
         std::ofstream out(fileName);
-        saveDot(out);
+        saveDot(out, std::forward<VertexName>(vertexName));
     }
 };
 
