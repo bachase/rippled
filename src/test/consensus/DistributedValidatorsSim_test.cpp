@@ -47,6 +47,7 @@ randomRankedConnect(
 {
     std::size_t const size = peers.size();
     assert(size == ranks.size());
+    (void)size;
 
     // 2. Generate UNLs based on sampling without replacement according
     //    to weights.

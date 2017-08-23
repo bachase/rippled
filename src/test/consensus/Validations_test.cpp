@@ -775,6 +775,57 @@ class Validations_test : public beast::unit_test::suite
     }
 
     void
+    testGetPreferredLedger()
+    {
+        using Dist = hash_map<Ledger::ID, std::uint32_t>;
+
+        {
+            Ledger::ID const current{1};
+            Dist dist;
+            BEAST_EXPECT(getPreferredLedger(current, dist) == current);
+        }
+
+        {
+            Ledger::ID const current{1};
+            Dist dist;
+            dist[Ledger::ID{2}] = 2;
+            BEAST_EXPECT(getPreferredLedger(current, dist) == Ledger::ID{2});
+        }
+
+        {
+            Ledger::ID const current{1};
+            Dist dist;
+            dist[Ledger::ID{1}] = 1;
+            dist[Ledger::ID{2}] = 2;
+            BEAST_EXPECT(getPreferredLedger(current, dist) == Ledger::ID{2});
+        }
+
+        {
+            Ledger::ID const current{1};
+            Dist dist;
+            dist[Ledger::ID{1}] = 2;
+            dist[Ledger::ID{2}] = 2;
+            BEAST_EXPECT(getPreferredLedger(current, dist) == current);
+        }
+
+        {
+            Ledger::ID const current{2};
+            Dist dist;
+            dist[Ledger::ID{1}] = 2;
+            dist[Ledger::ID{2}] = 2;
+            BEAST_EXPECT(getPreferredLedger(current, dist) == current);
+        }
+
+        {
+            Ledger::ID const current{1};
+            Dist dist;
+            dist[Ledger::ID{2}] = 2;
+            dist[Ledger::ID{3}] = 2;
+            BEAST_EXPECT(getPreferredLedger(current, dist) == Ledger::ID{3});
+        }
+    }
+
+    void
     run() override
     {
         testAddValidation();
@@ -786,6 +837,7 @@ class Validations_test : public beast::unit_test::suite
         testTrustedByLedgerFunctions();
         testExpire();
         testFlush();
+        testGetPreferredLedger();
     }
 };
 

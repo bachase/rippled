@@ -106,7 +106,7 @@ isCurrent(
 /** Determine the preferred ledger based on its support
 
     @param current The current ledger the node follows
-    @param ledgerCounts Ledger IDs and corresponding counts of support
+    @param dist Ledger IDs and corresponding counts of support
     @return The ID of the ledger with most support, preferring to stick with
             current ledger in the case of equal support
 */
@@ -121,10 +121,11 @@ getPreferredLedger(
     for (auto const& it : dist)
     {
         // Switch to ledger supported by more peers
-        // Or stick with ours on a tie
+        // On a tie, prefer the current ledger, or the one with higher ID
         if ((it.second > netLgrCount) ||
             ((it.second == netLgrCount) &&
-             ((it.first == current) || (it.first > netLgr))))
+             ((it.first == current) ||
+              (it.first > netLgr && netLgr != current))))
         {
             netLgr = it.first;
             netLgrCount = it.second;
