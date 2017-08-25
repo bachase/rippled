@@ -32,6 +32,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <map>
 #include <numeric>
 #include <string>
 #include <thread>
@@ -282,36 +283,40 @@ multi_runner_child::run_multi(Pred pred)
 {
     auto const& suite = beast::unit_test::global_suites();
     auto const num_tests = suite.size();
+
     // actual order to run the tests. Use this to move longer running tests to
     // the beginning to better take advantage of a multi process run.
-    std::vector<std::size_t> order(num_tests);
+
+    // Prioritize these tests, in this order, over other tests
+    std::vector<std::string> const prioritize{"ripple.app.Flow",
+                                              "ripple.tx.Offer"};
+    std::vector<size_t> order(num_tests);
     std::iota(order.begin(), order.end(), 0);
     {
-        // move ripple.tx.Offer and ripple.app.Flow to the beginning, since
-        // they are by far the longest tests.
-        size_t offer_index = num_tests;
-        size_t flow_index = num_tests;
-        std::string const flow_test_full_name("ripple.app.Flow");
-        std::string const offer_test_full_name("ripple.tx.Offer");
+        std::unordered_map<std::string, size_t> priorityFromName;
+        for (size_t i = 0; i < prioritize.size(); ++i)
+        {
+            priorityFromName.emplace(prioritize[i], i);
+        }
 
+        std::unordered_map<size_t, size_t> priorityFromIdx;
         size_t i = 0;
         for (auto const& t : suite)
         {
-            auto const full_name = t.full_name();
-            if (full_name == offer_test_full_name)
-                offer_index = i;
-            else if (full_name == flow_test_full_name)
-                flow_index = i;
-            if (offer_index < num_tests && flow_index < num_tests)
-                break;
+            auto const it = priorityFromName.find(t.full_name());
+            if(it != priorityFromName.end())
+                priorityFromIdx[i] = it->second;
+            else
+                priorityFromIdx[i] = i + prioritize.size();
             ++i;
         }
 
-        size_t to_swap = 0;
-        if (offer_index < num_tests)
-            std::swap(order[to_swap++], order[offer_index]);
-        if (flow_index < num_tests)
-            std::swap(order[to_swap++], order[flow_index]);
+        std::sort(order.begin(), order.end(), [&](size_t testIdxA, size_t testIdxB)
+        {
+            return priorityFromIdx[testIdxA] < priorityFromIdx[testIdxB];
+        });
+
+
     }
     bool failed = false;
 
