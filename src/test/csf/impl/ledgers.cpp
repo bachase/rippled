@@ -61,7 +61,7 @@ LedgerOracle::accept(
     next.closeTimeAgree = consensusCloseTime != NetClock::time_point{};
     if(next.closeTimeAgree)
         next.closeTime = effCloseTime(
-            consensusCloseTime, closeTimeResolution, curr.parentCloseTime());
+            consensusCloseTime, closeTimeResolution, curr.closeTime());
     else
         next.closeTime = consensusCloseTime + 1s;
 

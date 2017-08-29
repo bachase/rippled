@@ -198,7 +198,7 @@ public:
                 fast, round<milliseconds>(0.2 * parms.ledgerGRANULARITY));
 
             slow.connect(
-                fast, round<milliseconds>(1.1 * parms.ledgerGRANULARITY));
+                network, round<milliseconds>(1.1 * parms.ledgerGRANULARITY));
 
             // All peers submit their own ID as a transaction
             for (Peer* peer : network)
@@ -254,7 +254,7 @@ public:
                     fast, round<milliseconds>(0.2 * parms.ledgerGRANULARITY));
 
                 slow.connect(
-                    fast, round<milliseconds>(1.1 * parms.ledgerGRANULARITY));
+                    network, round<milliseconds>(1.1 * parms.ledgerGRANULARITY));
 
                 for (Peer* peer : slow)
                     peer->runAsValidator = isParticipant;
@@ -291,9 +291,11 @@ public:
 
                     Peer* slowPeer = *slow.begin();
 
-                    BEAST_EXPECT(
-                        slowPeer->prevProposers ==
-                        network.size() - slow.size());
+                    if (isParticipant)
+                        BEAST_EXPECT(
+                            slowPeer->prevProposers == network.size() - 1);
+                    else
+                        BEAST_EXPECT(slowPeer->prevProposers == fast.size());
 
                     for (Peer* peer : fast)
                     {
