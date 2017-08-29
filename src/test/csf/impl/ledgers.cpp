@@ -49,24 +49,24 @@ LedgerOracle::nextID() const
 
 Ledger
 LedgerOracle::accept(
-    Ledger const& curr,
+    Ledger const& parent,
     TxSetType const& txs,
     NetClock::duration closeTimeResolution,
     NetClock::time_point const& consensusCloseTime)
 {
-    Ledger::Instance next(*curr.instance_);
+    Ledger::Instance next(*parent.instance_);
     next.txs.insert(txs.begin(), txs.end());
-    next.seq = curr.seq() + Ledger::Seq{1};
+    next.seq = parent.seq() + Ledger::Seq{1};
     next.closeTimeResolution = closeTimeResolution;
     next.closeTimeAgree = consensusCloseTime != NetClock::time_point{};
     if(next.closeTimeAgree)
         next.closeTime = effCloseTime(
-            consensusCloseTime, closeTimeResolution, curr.parentCloseTime());
+            consensusCloseTime, closeTimeResolution, parent.closeTime());
     else
-        next.closeTime = consensusCloseTime + 1s;
+        next.closeTime = parent.closeTime() + 1s;
 
-    next.parentCloseTime = curr.closeTime();
-    next.parentID = curr.id();
+    next.parentCloseTime = parent.closeTime();
+    next.parentID = parent.id();
     auto it = instances_.left.find(next);
     if (it == instances_.left.end())
     {
