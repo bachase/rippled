@@ -1205,7 +1205,7 @@ Consensus<Adaptor>::updateOurPositions()
     auto const ourCutoff = now_ - parms.proposeINTERVAL;
 
     // Verify freshness of peer positions and compute close times
-    std::map<NetClock::time_point, int> effCloseTimes;
+    std::map<NetClock::time_point, int> roundedCloseTimes;
     {
         auto it = currPeerPositions_.begin();
         while (it != currPeerPositions_.end())
@@ -1223,10 +1223,8 @@ Consensus<Adaptor>::updateOurPositions()
             else
             {
                 // proposal is still fresh
-                ++effCloseTimes[effCloseTime(
-                    peerProp.closeTime(),
-                    closeResolution_,
-                    previousLedger_.closeTime())];
+                ++roundedCloseTimes[roundCloseTime(
+                    peerProp.closeTime(), closeResolution_)];
                 ++it;
             }
         }
@@ -1274,10 +1272,8 @@ Consensus<Adaptor>::updateOurPositions()
     {
         // no other times
         haveCloseTimeConsensus_ = true;
-        consensusCloseTime = effCloseTime(
-            result_->position.closeTime(),
-            closeResolution_,
-            previousLedger_.closeTime());
+        consensusCloseTime =
+            roundCloseTime(result_->position.closeTime(), closeResolution_);
     }
     else
     {
@@ -1295,10 +1291,8 @@ Consensus<Adaptor>::updateOurPositions()
         int participants = currPeerPositions_.size();
         if (mode_.get() == ConsensusMode::proposing)
         {
-            ++effCloseTimes[effCloseTime(
-                result_->position.closeTime(),
-                closeResolution_,
-                previousLedger_.closeTime())];
+            ++roundedCloseTimes[roundCloseTime(
+                result_->position.closeTime(), closeResolution_)];
             ++participants;
         }
 
@@ -1313,7 +1307,7 @@ Consensus<Adaptor>::updateOurPositions()
                         << " nw:" << neededWeight << " thrV:" << threshVote
                         << " thrC:" << threshConsensus;
 
-        for (auto const& it : effCloseTimes)
+        for (auto const& it : roundedCloseTimes)
         {
             JLOG(j_.debug())
                 << "CCTime: seq "
@@ -1345,10 +1339,7 @@ Consensus<Adaptor>::updateOurPositions()
 
     if (!ourNewSet &&
         ((consensusCloseTime !=
-          effCloseTime(
-              result_->position.closeTime(),
-              closeResolution_,
-              previousLedger_.closeTime())) ||
+          roundCloseTime(result_->position.closeTime(), closeResolution_)) ||
          result_->position.isStale(ourCutoff)))
     {
         // close time changed or our position is stale
@@ -1386,10 +1377,6 @@ Consensus<Adaptor>::updateOurPositions()
         if (!result_->position.isBowOut() &&
             (mode_.get() == ConsensusMode::proposing))
             adaptor_.propose(result_->position);
-    }
-    else if(consensusCloseTime != result_->position.closeTime())
-    {
-        result_->position.overrideCloseTime(consensusCloseTime);
     }
 }
 
