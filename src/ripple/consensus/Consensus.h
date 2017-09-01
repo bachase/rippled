@@ -1344,12 +1344,7 @@ Consensus<Adaptor>::updateOurPositions()
     }
 
     if (!ourNewSet &&
-        ((consensusCloseTime !=
-          effCloseTime(
-              result_->position.closeTime(),
-              closeResolution_,
-              previousLedger_.closeTime()))
-         ||
+        ((consensusCloseTime != result_->position.closeTime()) ||
          result_->position.isStale(ourCutoff)))
     {
         // close time changed or our position is stale

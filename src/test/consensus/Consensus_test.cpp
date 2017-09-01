@@ -404,22 +404,23 @@ public:
     }
 
     void
-    testInconsistentCloseTime()
+    testConsistentCloseTime()
     {
         using namespace csf;
         using namespace std::chrono;
 
         // This is a specialized test engineered to yield ledgers with different
         // close times even though the peers believe they had close time
-        // consensus on the ledger.
+        // consensus on the ledger. If Consensus used effCloseTime for proposals
+        // rather than roundCloseTime it would fail.
 
         ConsensusParms parms;
 
         Sim sim;
 
-        // This requires a group of 4 fast and 2 slow peers to create a situation
-        // in which a subset of peers requires seeing additional proposals to
-        // declare consensus.
+        // This requires a group of 4 fast and 2 slow peers to create a
+        // situation in which a subset of peers requires seeing additional
+        // proposals to declare consensus.
         PeerGroup slow = sim.createGroup(2);
         PeerGroup fast = sim.createGroup(4);
         PeerGroup network = fast + slow;
@@ -429,12 +430,14 @@ public:
 
         // Fast and slow network connections
         fast.connect(fast, round<milliseconds>(0.2 * parms.ledgerGRANULARITY));
-        slow.connect(network, round<milliseconds>(1.1 * parms.ledgerGRANULARITY));
+        slow.connect(
+            network, round<milliseconds>(1.1 * parms.ledgerGRANULARITY));
 
-        // Run to the ledger *prior* to decreasing the resolution
+        // Run to the ledger *prior* to decreasing the resolution, as that will
+        // be the opportunity to get a parentClose in the future.
         sim.run(increaseLedgerTimeResolutionEvery - 2);
 
-        // In order to create the discrepency, we want a case where if
+        // In order to create the discrepency, we want a case where
         //   X = effCloseTime(closeTime, resolution, parentCloseTime)
         //   X != effCloseTime(X, resolution, parentCloseTime)
         //
@@ -444,22 +447,27 @@ public:
 
         // So we want to find an offset  (now + offset) % 30s = 15
         //                               (now + offset) % 20s = 15
-        // This way, the next ledger will close and round up   Due to the network delay settings, the
-        // round of consensus will take 5s, so the next ledger's close time will
-
+        // This way, the next ledger will close and round up to the multiple of
+        // 30s.  The following ledger will close 5s later in simulation time,
+        // so would have consensus close time BEFORE the parent's close. In
+        // old code, the fast peers would have parentClose + 1 time
+        // as the consensus ledger time, but the slow peers would update their
+        // position prior to closing and have roundTime(parentClose+1) as their
+        // consensus ledger time. In this case, times have been chosen such that
+        // roundTime(parentClose + 1) != parentClose + 1.
 
         NetClock::duration when = network[0]->now().time_since_epoch();
 
         // Check we are before the 30s to 20s transition
-        NetClock::duration resolution = network[0]->lastClosedLedger.closeTimeResolution();
+        NetClock::duration resolution =
+            network[0]->lastClosedLedger.closeTimeResolution();
         BEAST_EXPECT(resolution == NetClock::duration{30s});
 
-        while (((when % NetClock::duration{30s}) != NetClock::duration{15s})
-            || ((when % NetClock::duration{20s}) != NetClock::duration{15s} ))
+        while (((when % NetClock::duration{30s}) != NetClock::duration{15s}) ||
+               ((when % NetClock::duration{20s}) != NetClock::duration{15s}))
             when += 1s;
-        // Advance the clock without consensus running (IS THIS WHAT PREVENTS IT IN PRACTICE?)
+        // Advance the clock to the time
         sim.scheduler.step_for(NetClock::time_point{when} - network[0]->now());
-
 
         // Run one more ledger with 30s resolution
         sim.run(1);
@@ -474,68 +482,16 @@ public:
             }
         }
 
-
         // All peers submit their own ID as a transaction
         for (Peer* peer : network)
             peer->submit(Tx{static_cast<std::uint32_t>(peer->id)});
 
         // Run 1 more round, this time it will have a decreased
         // resolution of 20 seconds.
-        // 86481
-
-        // The network delays are engineered so that the slow peers
-        // initially have the wrong tx hash, but they see a majority
-        // of agreement from their peers and declare consensus
-        //
-        // The trick is that everyone starts with a raw close time of
-        //  84681s
-        // Which has
-        //   effCloseTime(86481s, 20s,  86490s) = 86491s
-        // However, when the slow peers update their position, they change the
-        // close time to 86451s. The fast peers declare consensus with the
-        // 86481s as their position still.
-        //
-        // When accepted the ledger
-        // - fast peers use eff(86481s) -> 86491s as the close time
-        // - slow peers use eff(eff(86481s)) -> eff(86491s) -> 86500s!
-
         sim.run(1);
 
-        // Not currently synchronized
-        BEAST_EXPECT(!sim.synchronized());
-
-        // All slow peers agreed on LCL
-        BEAST_EXPECT(std::all_of(slow.begin(), slow.end(), [&slow](Peer const * p)
-        {
-            return p->lastClosedLedger.id() == slow[0]->lastClosedLedger.id();
-        }));
-
-        // All fast peers agreed on LCL
-        BEAST_EXPECT(std::all_of(fast.begin(), fast.end(), [&fast](Peer const * p)
-        {
-            return p->lastClosedLedger.id() == fast[0]->lastClosedLedger.id();
-        }));
-
-        auto slowClose = slow[0]->lastClosedLedger.closeTime();
-        auto fastClose = fast[0]->lastClosedLedger.closeTime();
-
-        // Agree on parent close and close resolution
-        BEAST_EXPECT(slow[0]->lastClosedLedger.parentCloseTime() ==
-         fast[0]->lastClosedLedger.parentCloseTime());
-        BEAST_EXPECT(slow[0]->lastClosedLedger.closeTimeResolution() ==
-         fast[0]->lastClosedLedger.closeTimeResolution());
-
-        auto parentClose = slow[0]->lastClosedLedger.parentCloseTime();
-        auto closeResolution = slow[0]->lastClosedLedger.closeTimeResolution();
-
-        // Close times disagree ...
-        BEAST_EXPECT(slowClose != fastClose);
-        // Effective close times agree! The slow peer already rounded!
-        BEAST_EXPECT(effCloseTime(slowClose, closeResolution, parentClose) ==
-        effCloseTime(fastClose, closeResolution, parentClose));
-
-
-
+        // Fully synchronized
+        BEAST_EXPECT(sim.synchronized());
     }
 
     void
@@ -812,7 +768,7 @@ public:
         testPeersAgree();
         testSlowPeers();
         testCloseTimeDisagree();
-        testInconsistentCloseTime();
+        testConsistentCloseTime();
         testWrongLCL();
         testFork();
         testHubNetwork();
