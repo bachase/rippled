@@ -141,23 +141,19 @@ class DurationDistribution
     std::shared_ptr<IDurationDistribution> impl_;
 
 public:
-    template <class T>
-    explicit
-    DurationDistribution(T& t) : impl_{new Any<T>(t)}
-    {
-    }
-
-    template <class T>
+    template <
+        class T,
+        class = std::
+            enable_if_t<!std::is_same<std::decay_t<T>, DurationDistribution>::value, void>>
     explicit
     DurationDistribution(T&& t) : impl_{new Any<T>(t)}
     {
     }
 
     // copyable
-    DurationDistribution(DurationDistribution&) = default;
-    DurationDistribution(DurationDistribution const&) = default;
-    DurationDistribution& operator=(DurationDistribution&) = default;
-    DurationDistribution& operator=(DurationDistribution const&) = default;
+    DurationDistribution(DurationDistribution const& o )  = default;
+    DurationDistribution& operator=(DurationDistribution const & o) = default;
+
 
     // non-movable
     DurationDistribution(DurationDistribution&&) = default;

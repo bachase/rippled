@@ -147,7 +147,7 @@ public:
             Peer const& to,
             duration const& delay = std::chrono::seconds{0})
     {
-        connect(from, to,
+        return connect(from, to,
                 DurationDistribution(ConstantDuration{delay}));
     }
 
@@ -257,12 +257,13 @@ template <class Function>
 inline void
 BasicNetwork<Peer>::send(Peer const& from, Peer const& to, Function&& f)
 {
+    using namespace std::chrono_literals;
     auto link = links_.edge(from,to);
     if(!link)
         return;
     time_point const sent = scheduler.now();
     scheduler.in(
-        link->delayGen(),
+        std::max(0ns, link->delayGen()),
         [ from, to, sent, f = std::forward<Function>(f), this ] {
             // only process if still connected and connection was
             // not broken since the message was sent
