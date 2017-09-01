@@ -176,6 +176,19 @@ public:
             ++proposeSeq_;
     }
 
+    /** Override the position close time.
+
+        When newCloseTime = effCloseTime(closeTime, resolution, parentClose)
+        is the consensus close time but newCloseTime != closeTime, we may not
+        share an updated position, but we should update our closeTime to match
+
+    */
+    void
+    overrideCloseTime(NetClock::time_point consensusCloseTime)
+    {
+        closeTime_ = consensusCloseTime;
+    }
+
     /** Leave consensus
 
         Update position to indicate the node left consensus.

@@ -1344,7 +1344,11 @@ Consensus<Adaptor>::updateOurPositions()
     }
 
     if (!ourNewSet &&
-        ((consensusCloseTime != result_->position.closeTime()) ||
+        ((consensusCloseTime !=
+          effCloseTime(
+              result_->position.closeTime(),
+              closeResolution_,
+              previousLedger_.closeTime())) ||
          result_->position.isStale(ourCutoff)))
     {
         // close time changed or our position is stale
@@ -1382,6 +1386,10 @@ Consensus<Adaptor>::updateOurPositions()
         if (!result_->position.isBowOut() &&
             (mode_.get() == ConsensusMode::proposing))
             adaptor_.propose(result_->position);
+    }
+    else if(consensusCloseTime != result_->position.closeTime())
+    {
+        result_->position.overrideCloseTime(consensusCloseTime);
     }
 }
 
