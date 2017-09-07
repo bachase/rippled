@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
-    Copyright (c) 2012-2016 Ripple Labs Inc->
+    Copyright (c) 2012-2016 Ripple Labs Inc.
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -26,59 +26,6 @@
 namespace ripple {
 namespace test {
 
-namespace csf
-{
-/** Randomly specify trust based on ranking of peers
-
-    Generate a random trust graph based on a provided ranking of peers.
-
-        1. Generates  `numUNL` random UNLs by sampling without replacement
-            from the ranked nodes.
-        2. Restricts the size of the random UNLs according to SizePDF
-        3. Each node randomly selects one such generated UNL to use as its own.
-
-    @param peers The group of peers to create trust over
-    @param numUNLs The number of UNLs to create
-    @param unlSizePDF Generates random integeres between (0,size-1) to
-                        restrict the size of generated PDF
-    @param Generator The uniform random bit generator to use
-
-*/
-template <class SizePDF, class Generator>
-void
-randomRankedTrust(
-    PeerGroup & peers,
-    std::vector<double> const & ranks,
-    int numUNLs,
-    SizePDF unlSizePDF,
-    Generator& g)
-{
-    std::size_t const size = peers.size();
-    assert(size == ranks.size());
-    (void)size;
-
-    // 2. Generate UNLs based on sampling without replacement according
-    //    to weights.
-    std::vector<PeerGroup> unls(numUNLs);
-    std::vector<Peer*> rawPeers(peers.begin(), peers.end());
-    std::generate(unls.begin(), unls.end(), [&]() {
-        std::vector<Peer*> res =
-            random_weighted_shuffle(rawPeers, ranks, g);
-        res.resize(unlSizePDF(g));
-        return PeerGroup(std::move(res));
-    });
-
-    // 3. Assign trust
-    std::uniform_int_distribution<int> u(0, numUNLs - 1);
-    for(auto & peer : peers)
-    {
-        for(auto & target : unls[u(g)])
-            peer->trust(*target);
-    }
-}
-
-}
-
 class ScaleFreeSim_test : public beast::unit_test::suite
 {
     void
@@ -86,24 +33,22 @@ class ScaleFreeSim_test : public beast::unit_test::suite
     {
         using namespace std::chrono;
         using namespace csf;
+
         // Generate a quasi-random scale free network and simulate consensus
         // as we vary transaction submission rates
 
-        // NOTE:
-        // Currently This simulation is a work in progress and is being used to
-        // explore the best design for the simulation framework
 
-        int N = 100;  // Peers
+        int const N = 100;  // Peers
 
-        int numUNLs = 15;  //  UNL lists
-        int minUNLSize = N / 4, maxUNLSize = N / 2;
+        int const numUNLs = 15;  //  UNL lists
+        int const minUNLSize = N / 4, maxUNLSize = N / 2;
 
-        ConsensusParms parms;
+        ConsensusParms const parms;
         Sim sim;
         PeerGroup network = sim.createGroup(N);
 
         // generate trust ranks
-        std::vector<double> ranks =
+        std::vector<double> const ranks =
             sample(network.size(), PowerLawDistribution{1, 3}, sim.rng);
 
         // generate scale-free trust graph
@@ -118,7 +63,7 @@ class ScaleFreeSim_test : public beast::unit_test::suite
         // Initialize collectors to track statistics to report
         TxCollector txCollector;
         LedgerCollector ledgerCollector;
-        auto colls = collectors(txCollector, ledgerCollector);
+        auto colls = makeCollectors(txCollector, ledgerCollector);
         sim.collectors.add(colls);
 
         // Initial round to set prior state
@@ -128,16 +73,16 @@ class ScaleFreeSim_test : public beast::unit_test::suite
         HeartbeatTimer heart(sim.scheduler, seconds(10s));
 
         // Run for 10 minues, submitting 100 tx/second
-        std::chrono::nanoseconds simDuration = 10min;
-        std::chrono::nanoseconds quiet = 10s;
-        Rate rate{100, 1000ms};
+        std::chrono::nanoseconds const simDuration = 10min;
+        std::chrono::nanoseconds const quiet = 10s;
+        Rate const rate{100, 1000ms};
 
         // txs, start/stop/step, target
-        auto peerSelector = selector(network.begin(),
+        auto peerSelector = makeSelector(network.begin(),
                                      network.end(),
                                      ranks,
                                      sim.rng);
-        auto txSubmitter = submitter(ConstantDistribution{rate.inv()},
+        auto txSubmitter = makeSubmitter(ConstantDistribution{rate.inv()},
                           sim.scheduler.now() + quiet,
                           sim.scheduler.now() + (simDuration - quiet),
                           peerSelector,

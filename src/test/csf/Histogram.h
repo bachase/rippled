@@ -29,11 +29,13 @@ namespace csf {
 
 /** Basic histogram.
 
-    Histgram for a type `T` that satisfies
+    Histogram for a type `T` that satisfies
       - Default construction: T{}
       - Comparison : T a, b;  bool res = a < b
       - Addition: T a, b; T c = a + b;
+      - Multiplication : T a, std::size_t b; T c = a * b;
       - Divison: T a; std::size_t b;  T c = a/b;
+
 
 */
 template <class T, class Compare = std::less<T>>
@@ -66,16 +68,16 @@ public:
         return counts_.size();
     }
 
-    /** Minimum sample */
+    /** Minimum observed value */
     T
-    min() const
+    minValue() const
     {
         return counts_.empty() ? T{} : counts_.begin()->first;
     }
 
-    /** Maximum sample */
+    /** Maximum observed value */
     T
-    max() const
+    maxValue() const
     {
         return counts_.empty() ? T{} : counts_.rbegin()->first;
     }
@@ -99,7 +101,7 @@ public:
     /** Calculate the given percentile of the distribution.
 
         @param p Percentile between 0 and 1, e.g. 0.50 is 50-th percentile
-                 If the percentile between two bins, uses the nearest bin.
+                 If the percentile falls between two bins, uses the nearest bin.
         @return The given percentile of the distribution
     */
     T

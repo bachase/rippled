@@ -204,7 +204,7 @@ struct Peer
     Ledger fullyValidatedLedger;
 
     //-------------------------------------------------------------------------
-    // Store most network messages; these could be purged if memory use every
+    // Store most network messages; these could be purged if memory use ever
     // becomes problematic
 
     //! Map from Ledger::ID to vector of Positions with that ledger
@@ -219,7 +219,7 @@ struct Peer
 
     //! The number of ledgers this peer has completed
     int completedLedgers = 0;
-    //! The number of ledges this peer should complete before stopping to run
+    //! The number of ledgers this peer should complete before stopping to run
     int targetLedgers = std::numeric_limits<int>::max();
 
     //! Skew of time relative to the common scheduler clock
@@ -506,7 +506,7 @@ struct Peer
     {
         schedule(delays.ledgerAccept, [&]() {
             TxSet const acceptedTxs = injectTxs(prevLedger, result.set);
-            auto newLedger = oracle.accept(
+            Ledger const newLedger = oracle.accept(
                 prevLedger,
                 acceptedTxs.txs(),
                 closeResolution,
@@ -518,7 +518,7 @@ struct Peer
             prevRoundTime = result.roundTime.read();
             lastClosedLedger = newLedger;
 
-            auto it = std::remove_if(
+            auto const it = std::remove_if(
                 openTxs.begin(), openTxs.end(), [&](Tx const& tx) {
                     return acceptedTxs.exists(tx.id());
                 });
@@ -526,7 +526,8 @@ struct Peer
 
             // Only send validation if the new ledger is compatible with our
             // fully validated ledger
-            bool isCompatible = oracle.isAncestor(fullyValidatedLedger, newLedger);
+            bool const isCompatible =
+                oracle.isAncestor(fullyValidatedLedger, newLedger);
 
             if (runAsValidator && isCompatible)
             {
@@ -578,17 +579,17 @@ struct Peer
         if (ledger.seq() == Ledger::Seq{0})
             return ledgerID;
 
-        Ledger::ID parentID;
+        Ledger::ID parentID{0};
         // Only set the parent ID if we believe ledger is the right ledger
         if (mode != ConsensusMode::wrongLedger)
             parentID = ledger.parentID();
 
         // Get validators that are on our ledger, or "close" to being on
         // our ledger.
-        auto ledgerCounts = validations.currentTrustedDistribution(
+        auto const ledgerCounts = validations.currentTrustedDistribution(
             ledgerID, parentID, earliestAllowedSeq());
 
-        Ledger::ID netLgr = getPreferredLedger(ledgerID, ledgerCounts);
+        Ledger::ID const netLgr = getPreferredLedger(ledgerID, ledgerCounts);
 
         if (netLgr != ledgerID)
         {
@@ -640,14 +641,13 @@ struct Peer
     {
         v.setTrusted();
         v.setSeen(now());
-        AddOutcome res = validations.add(v.key(), v);
+        AddOutcome const res = validations.add(v.key(), v);
 
         if(res == AddOutcome::stale || res == AddOutcome::repeat)
             return false;
 
         // Acquire will try to get from network if not already local
-        Ledger const* lgr = acquireLedger(v.ledgerID());
-        if (lgr)
+        if (Ledger const* lgr = acquireLedger(v.ledgerID()))
             checkFullyValidated(*lgr);
         return true;
     }
@@ -660,8 +660,8 @@ struct Peer
         if (ledger.seq() <= fullyValidatedLedger.seq())
             return;
 
-        auto count = validations.numTrustedForLedger(ledger.id());
-        auto numTrustedPeers = trustGraph.graph().outDegree(this);
+        std::size_t const count = validations.numTrustedForLedger(ledger.id());
+        std::size_t const numTrustedPeers = trustGraph.graph().outDegree(this);
         quorum = static_cast<std::size_t>(std::ceil(numTrustedPeers * 0.8));
         if (count >= quorum)
         {
@@ -767,7 +767,7 @@ struct Peer
     bool
     handle(TxSet const& txs)
     {
-        auto it = txSets.insert(std::make_pair(txs.id(), txs));
+        auto const it = txSets.insert(std::make_pair(txs.id(), txs));
         if (it.second)
             consensus.gotTxSet(now(), txs);
         // relay only if new
@@ -778,7 +778,7 @@ struct Peer
     handle(Tx const& tx)
     {
         // Ignore and suppress relay of transactions already in last ledger
-        auto const& lastClosedTxs = lastClosedLedger.txs();
+        TxSetType const& lastClosedTxs = lastClosedLedger.txs();
         if (lastClosedTxs.find(tx) != lastClosedTxs.end())
             return false;
 
@@ -811,7 +811,7 @@ struct Peer
     //--------------------------------------------------------------------------
     // Simulation "driver" members
 
-    //! Heartbeat tiemr call
+    //! Heartbeat timer call
     void
     timerEntry()
     {
@@ -825,12 +825,13 @@ struct Peer
     void
     startRound()
     {
-        auto valDistribution = validations.currentTrustedDistribution(
+        auto const valDistribution = validations.currentTrustedDistribution(
             lastClosedLedger.id(),
             lastClosedLedger.parentID(),
             earliestAllowedSeq());
 
-        Ledger::ID bestLCL =
+        // Between rounds, we take the majority ledger and use the 
+        Ledger::ID const bestLCL =
             getPreferredLedger(lastClosedLedger.id(), valDistribution);
 
         issue(StartRound{bestLCL, lastClosedLedger});

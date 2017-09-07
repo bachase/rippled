@@ -5241,9 +5241,6 @@
     <ClCompile Include="..\..\src\test\consensus\ByzantineFailureSim_test.cpp">
       <Filter>test\consensus</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\test\consensus\ClockSkewSim_test.cpp">
-      <Filter>test\consensus</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\test\consensus\Consensus_test.cpp">
       <Filter>test\consensus</Filter>
     </ClCompile>

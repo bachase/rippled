@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
-    Copyright (c) 2012-2017 Ripple Labs Inc->
+    Copyright (c) 2012-2017 Ripple Labs Inc.
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -75,14 +75,14 @@ class ByzantineFailureSim_test : public beast::unit_test::suite
         // set prior state
         sim.run(1);
 
-        PeerGroup byzantineNodes = a + b + c +g;
+        PeerGroup byzantineNodes = a + b + c + g;
         // All peers see some TX 0
         for (Peer * peer : network)
         {
             peer->submit(Tx(0));
             // Peers 0,1,2,6 will close the next ledger differently by injecting
             // a non-consensus approved transaciton
-            if (byzantineNodes.exists(peer))
+            if (byzantineNodes.contains(peer))
             {
                 peer->txInjections.emplace(
                     peer->lastClosedLedger.seq(), Tx{42});

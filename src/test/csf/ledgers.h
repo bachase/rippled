@@ -85,7 +85,7 @@ private:
         //! When the ledger closed (up to closeTimeResolution)
         NetClock::time_point closeTime;
 
-        //! Whether consenssus agreed on the close time
+        //! Whether consensus agreed on the close time
         bool closeTimeAgree = true;
 
         //! Parent ledger id

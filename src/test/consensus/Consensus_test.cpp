@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
-    Copyright (c) 2012-2016 Ripple Labs Inc->
+    Copyright (c) 2012-2016 Ripple Labs Inc.
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -36,7 +36,7 @@ public:
         using namespace std::chrono_literals;
 
         // Use default parameters
-        ConsensusParms p;
+        ConsensusParms const p;
         beast::Journal j;
 
         // Bizarre times forcibly close
@@ -75,7 +75,7 @@ public:
         using namespace std::chrono_literals;
 
         // Use default parameterss
-        ConsensusParms p;
+        ConsensusParms const p;
         beast::Journal j;
 
         // Not enough time has elapsed
@@ -141,11 +141,11 @@ public:
         using namespace csf;
         using namespace std::chrono;
 
-        ConsensusParms parms;
+        ConsensusParms const parms;
         Sim sim;
         PeerGroup peers = sim.createGroup(5);
 
-        // Connected trust  and network graphs with single fixed delay
+        // Connected trust and network graphs with single fixed delay
         peers.trustAndConnect(
             peers, round<milliseconds>(0.2 * parms.ledgerGRANULARITY));
 
@@ -184,7 +184,7 @@ public:
 
         // Test when a slow peer doesn't delay a consensus quorum (4/5 agree)
         {
-            ConsensusParms parms;
+            ConsensusParms const parms;
             Sim sim;
             PeerGroup slow = sim.createGroup(1);
             PeerGroup fast = sim.createGroup(4);
@@ -239,7 +239,7 @@ public:
 
             for (auto isParticipant : {true, false})
             {
-                ConsensusParms parms;
+                ConsensusParms const parms;
 
                 Sim sim;
                 PeerGroup slow = sim.createGroup(2);
@@ -277,6 +277,7 @@ public:
                         auto const& lcl = peer->lastClosedLedger;
                         BEAST_EXPECT(lcl.seq() == Ledger::Seq{1});
                         BEAST_EXPECT(lcl.txs().find(Tx{0}) == lcl.txs().end());
+                        BEAST_EXPECT(lcl.txs().find(Tx{1}) == lcl.txs().end());
                         for (std::uint32_t i = slow.size(); i < network.size();
                              ++i)
                             BEAST_EXPECT(
@@ -311,8 +312,8 @@ public:
                         // have less than the 50% initial threshold. They also
                         // cannot declare consensus, since 4/6 agreeing
                         // positions are < 80% threshold. They therefore need an
-                        // additional timer period to see the updated positions
-                        // from Peer 0 & 1.
+                        // additional timerEntry call to see the updated
+                        // positions from Peer 0 & 1.
 
                         if (isParticipant)
                         {
@@ -352,7 +353,7 @@ public:
         // sets a relative offset to the peers internal clocks so that they
         // send proposals with differing times.
 
-        // However, agreement is of the effective close time, not the
+        // However, agreement is on the effective close time, not the
         // exact close time. The minimum closeTimeResolution is given by
         // ledgerPossibleTimeResolutions[0], which is currently 10s. This means
         // the skews need to be at least 10 seconds to have different effective
@@ -367,7 +368,7 @@ public:
         // skew. Then no majority (1/3 < 1/2) of nodes will agree on an
         // actual close time.
 
-        ConsensusParms parms;
+        ConsensusParms const parms;
         Sim sim;
 
         PeerGroup groupA = sim.createGroup(2);
@@ -410,7 +411,7 @@ public:
         // Specialized test to exercise a temporary fork in which some peers
         // are working on an incorrect prior ledger.
 
-        ConsensusParms parms;
+        ConsensusParms const parms;
 
         // Vary the time it takes to process validations to exercise detecting
         // the wrong LCL at different phases of consensus
@@ -432,7 +433,10 @@ public:
 
             // Nodes 0-1 will acquire the proper ledger from the network and
             // resume consensus and eventually generate the dominant network
-            // ledger
+            // ledger.
+
+            // This topology can potentially fork with the above trust relations
+            // but that is intended for this test.
 
             Sim sim;
 
@@ -451,8 +455,6 @@ public:
             CollectByNode<JumpCollector> jumps;
             sim.collectors.add(jumps);
 
-            // This topology can potentially fork, which is why we are using it
-            // for this test.
             BEAST_EXPECT(sim.trustGraph.canFork(parms.minCONSENSUS_PCT / 100.));
 
             // initial round to set prior state
@@ -742,7 +744,7 @@ public:
         // Vary overlap between two UNLs
         for (std::uint32_t overlap = 0; overlap <= numPeers; ++overlap)
         {
-            ConsensusParms parms;
+            ConsensusParms const parms;
             Sim sim;
 
             std::uint32_t numA = (numPeers - overlap) / 2;
@@ -797,7 +799,7 @@ public:
         // Simulate a set of 5 validators that aren't directly connected but
         // rely on a single hub node for communication
 
-        ConsensusParms parms;
+        ConsensusParms const parms;
         Sim sim;
         PeerGroup validators = sim.createGroup(5);
         PeerGroup center = sim.createGroup(1);

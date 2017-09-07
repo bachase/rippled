@@ -69,10 +69,7 @@ public:
             BEAST_EXPECT(graph.outDegree('a') == expected.size());
         }
 
-        int count = 0;
-        for(auto const & edge : graph.outEdges('r'))
-            ++count;
-        BEAST_EXPECT(count == 0);
+        BEAST_EXPECT(graph.outEdges('r').size() == 0);
         BEAST_EXPECT(graph.outDegree('r') == 0);
         BEAST_EXPECT(graph.outDegree('c') == 0);
 

@@ -48,7 +48,7 @@ namespace csf {
     A message is modeled using a lambda function. The caller
     provides the code to execute upon delivery of the message.
     If a Peer is disconnected, all messages pending delivery
-    at either end of the connection will not deliver.
+    at either end of the connection will not be delivered.
 
     When creating the Peer set, the caller needs to provide a
     Scheduler object for managing the the timing and delivery
@@ -203,8 +203,7 @@ BasicNetwork<Peer>::BasicNetwork(Scheduler& s) : scheduler(s)
 }
 
 template <class Peer>
-inline
-bool
+inline bool
 BasicNetwork<Peer>::connect(
     Peer const& from,
     Peer const& to,
@@ -222,8 +221,7 @@ BasicNetwork<Peer>::connect(
 }
 
 template <class Peer>
-inline
-bool
+inline bool
 BasicNetwork<Peer>::disconnect(Peer const& peer1, Peer const& peer2)
 {
     if (! links_.disconnect(peer1, peer2))
@@ -233,7 +231,6 @@ BasicNetwork<Peer>::disconnect(Peer const& peer1, Peer const& peer2)
     assert(r);
     return true;
 }
-
 
 template <class Peer>
 template <class Function>

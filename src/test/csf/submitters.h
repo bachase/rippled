@@ -28,7 +28,7 @@ namespace ripple {
 namespace test {
 namespace csf {
 
-// Submitters are class for simulating submission of transactions to the network
+// Submitters are classes for simulating submission of transactions to the network
 
 /** Represents rate as a count/duration */
 struct Rate
@@ -49,8 +49,8 @@ struct Rate
     to succesive calls of distribution(), until stop.
 
     @tparam Distribution is a `UniformRandomBitGenerator` from the STL that
-            is usesd by random distributions to generate random samples
-    @tparam Generator is a object with member
+            is used by random distributions to generate random samples
+    @tparam Generator is an object with member
 
             T operator()(Generator &g)
 
@@ -111,7 +111,7 @@ public:
 
 template <class Distribution, class Generator, class Selector>
 Submitter<Distribution, Generator, Selector>
-submitter(
+makeSubmitter(
     Distribution dist,
     SimTime start,
     SimTime end,

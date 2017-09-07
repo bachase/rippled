@@ -118,7 +118,7 @@ LedgerOracle::branches(std::set<Ledger> const & ledgers) const
         bool found = false;
         for (auto idx = 0; idx < tips.size() && !found; ++idx)
         {
-            bool idxEarlier = tips[idx].seq() < ledger.seq();
+            bool const idxEarlier = tips[idx].seq() < ledger.seq();
             Ledger const & earlier = idxEarlier ? tips[idx] : ledger;
             Ledger const & later = idxEarlier ? ledger : tips[idx] ;
             if (isAncestor(earlier, later))

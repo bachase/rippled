@@ -99,9 +99,7 @@ class LedgerTiming_test : public beast::unit_test::suite
     {
         using namespace std::chrono_literals;
         using tp = NetClock::time_point;
-        tp close;
-
-        close = effCloseTime(tp{10s}, 30s, tp{0s});
+        tp close = effCloseTime(tp{10s}, 30s, tp{0s});
         BEAST_EXPECT(close == tp{1s});
 
         close = effCloseTime(tp{16s}, 30s, tp{0s});

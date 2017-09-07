@@ -125,7 +125,7 @@ public:
 
     /** Run consensus protocol to generate the provided number of ledgers.
 
-        Has each peer runs consensus until it closes `ledgers` more ledgers.
+        Has each peer run consensus until it closes `ledgers` more ledgers.
 
         @param ledgers The number of additional ledgers to close
     */

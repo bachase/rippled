@@ -93,10 +93,10 @@ public:
     }
 };
 
-/** Create an instance of Collectors<Cs..> */
+/** Create an instance of Collectors<Cs...> */
 template <class... Cs>
 Collectors<Cs...>
-collectors(Cs&... cs)
+makeCollectors(Cs&... cs)
 {
     return Collectors<Cs...>(cs...);
 }

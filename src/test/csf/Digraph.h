@@ -42,12 +42,12 @@ struct NoEdgeData
 
 /** Directed graph
 
-Basic directed graph using adjacency list target represent out edges.
+Basic directed graph that uses an adjacency lists to represent out edges.
 
 Instances of Vertex uniquely identify vertices in the graph. Instances of
-EdgeData is data associated with a connection between two vertices.
+EdgeData is any data to store in the edge connecting two vertices.
 
-Both Vertex and EdgeData should be light-weight and cheap-target-copy.
+Both Vertex and EdgeData should be lightweight and cheap to copy.
 
 */
 template <class Vertex, class EdgeData = detail::NoEdgeData>

@@ -70,7 +70,7 @@ sample( std::size_t size, PDF pdf, Generator& g)
     return res;
 }
 
-/** Invokable that returns random samples from a range according to a discrete
+/** Invocable that returns random samples from a range according to a discrete
     distribution
 
     Given a pair of random access iterators begin and end, each call to the
@@ -112,7 +112,7 @@ public:
 
 template <typename Iter, typename Generator>
 Selector<Iter,Generator>
-selector(Iter first, Iter last, std::vector<double> const& w, Generator& g)
+makeSelector(Iter first, Iter last, std::vector<double> const& w, Generator& g)
 {
     return Selector<Iter, Generator>(first, last, w, g);
 }

@@ -4,7 +4,7 @@ The Consensus Simulation Framework is a set of software components for
 describing, running and analyzing simulations of the consensus algorithm in a
 controlled manner. It is also used to unit test the generic Ripple consensus
 algorithm implementation. The framework is in its early stages, so the design
-and supported features is subject to change.
+and supported features are subject to change.
 
 ## Overview
 
@@ -180,8 +180,8 @@ The example has two calls to `sim.run(1)`.  This call runs the simulation until
 each `Peer` has closed one additional ledger.  After closing the additional
 ledger, the `Peer` stops participating in consensus.  The first call is used to
 ensure a more useful prior state of all `Peer`s. After the transaction
-submission, the second call to `run` results in additional ledger that accepts
-those transactions.
+submission, the second call to `run` results in one additional ledger that
+accepts those transactions.
 
 Alternatively, you can specify a duration to run the simulation, e.g.
 `sim.run(10s)` which would have `Peer`s continuously run consensus until the

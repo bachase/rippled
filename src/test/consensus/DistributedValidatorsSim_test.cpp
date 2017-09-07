@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
-    Copyright (c) 2012-2016 Ripple Labs Inc->
+    Copyright (c) 2012-2016 Ripple Labs Inc.
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -32,45 +32,6 @@
 namespace ripple {
 namespace test {
 
-namespace csf
-{
-
-template<class SizePDF, class Generator>
-void
-randomRankedConnect(
-        PeerGroup &peers,
-        std::vector<double> const &ranks,
-        int numConnections,
-        SizePDF numConnectionsPDF,
-        std::chrono::milliseconds delay,
-        Generator &g)
-{
-    std::size_t const size = peers.size();
-    assert(size == ranks.size());
-    (void)size;
-
-    // 2. Generate UNLs based on sampling without replacement according
-    //    to weights.
-    std::vector<PeerGroup> connectionLists(numConnections);
-    std::vector<Peer *> rawPeers(peers.begin(), peers.end());
-    std::generate(connectionLists.begin(), connectionLists.end(), [&]() {
-        std::vector<Peer *> res =
-                random_weighted_shuffle(rawPeers, ranks, g);
-        res.resize(numConnectionsPDF(g));
-        return PeerGroup(std::move(res));
-    });
-
-    // 3. Assign trust
-    std::uniform_int_distribution<int> u(0, numConnections - 1);
-    for (auto &peer : peers)
-    {
-        for (auto &target : connectionLists[u(g)])
-            peer->connect(*target, delay);
-    }
-}
-
-} // csf
-
 /** In progress simulations for diversifying and distributing validators
 */
 class DistributedValidators_test : public beast::unit_test::suite
@@ -100,7 +61,7 @@ class DistributedValidators_test : public beast::unit_test::suite
         // number of peers, UNLs, connections
         BEAST_EXPECT(numPeers >= 1);
 
-        ConsensusParms parms;
+        ConsensusParms const parms;
         Sim sim;
         PeerGroup peers = sim.createGroup(numPeers);
 
@@ -113,26 +74,26 @@ class DistributedValidators_test : public beast::unit_test::suite
         // Initialize collectors to track statistics to report
         TxCollector txCollector;
         LedgerCollector ledgerCollector;
-        auto colls = collectors(txCollector, ledgerCollector);
+        auto colls = makeCollectors(txCollector, ledgerCollector);
         sim.collectors.add(colls);
 
         // Initial round to set prior state
         sim.run(1);
 
         // Run for 10 minues, submitting 100 tx/second
-        std::chrono::nanoseconds simDuration = 10min;
-        std::chrono::nanoseconds quiet = 10s;
-        Rate rate{100, 1000ms};
+        std::chrono::nanoseconds const simDuration = 10min;
+        std::chrono::nanoseconds const quiet = 10s;
+        Rate const rate{100, 1000ms};
 
         // Initialize timers
         HeartbeatTimer heart(sim.scheduler);
 
         // txs, start/stop/step, target
-        auto peerSelector = selector(peers.begin(),
+        auto peerSelector = makeSelector(peers.begin(),
                                      peers.end(),
                                      std::vector<double>(numPeers, 1.),
                                      sim.rng);
-        auto txSubmitter = submitter(ConstantDistribution{rate.inv()},
+        auto txSubmitter = makeSubmitter(ConstantDistribution{rate.inv()},
                                      sim.scheduler.now() + quiet,
                                      sim.scheduler.now() + simDuration - quiet,
                                      peerSelector,
@@ -158,7 +119,7 @@ class DistributedValidators_test : public beast::unit_test::suite
         txCollector.report(simDuration, log, true);
         ledgerCollector.report(simDuration, log, false);
 
-        std::string tag = std::to_string(numPeers);
+        std::string const tag = std::to_string(numPeers);
         txCollector.csv(simDuration, txLog, tag, printHeaders);
         ledgerCollector.csv(simDuration, ledgerLog, tag, printHeaders);
 
@@ -187,16 +148,16 @@ class DistributedValidators_test : public beast::unit_test::suite
             << std::endl;
 
         // number of peers, UNLs, connections
-        int numCNLs    = std::max(int(1.00 * numPeers), 1),
-            minCNLSize = std::max(int(0.25 * numCNLs),  1),
-            maxCNLSize = std::max(int(0.50 * numCNLs),  1);
+        int const numCNLs    = std::max(int(1.00 * numPeers), 1);
+        int const minCNLSize = std::max(int(0.25 * numCNLs),  1);
+        int const maxCNLSize = std::max(int(0.50 * numCNLs),  1);
         BEAST_EXPECT(numPeers >= 1);
         BEAST_EXPECT(numCNLs >= 1);
         BEAST_EXPECT(1 <= minCNLSize
                 && minCNLSize <= maxCNLSize
                 && maxCNLSize <= numPeers);
 
-        ConsensusParms parms;
+        ConsensusParms const parms;
         Sim sim;
         PeerGroup peers = sim.createGroup(numPeers);
 
@@ -204,16 +165,16 @@ class DistributedValidators_test : public beast::unit_test::suite
         peers.trust(peers);
 
         // scale-free connect graph with fixed delay
-        std::vector<double> ranks =
+        std::vector<double> const ranks =
                 sample(peers.size(), PowerLawDistribution{1, 3}, sim.rng);
         randomRankedConnect(peers, ranks, numCNLs,
                 std::uniform_int_distribution<>{minCNLSize, maxCNLSize},
-                delay, sim.rng);
+                sim.rng, delay);
 
         // Initialize collectors to track statistics to report
         TxCollector txCollector;
         LedgerCollector ledgerCollector;
-        auto colls = collectors(txCollector, ledgerCollector);
+        auto colls = makeCollectors(txCollector, ledgerCollector);
         sim.collectors.add(colls);
 
         // Initial round to set prior state
@@ -228,11 +189,11 @@ class DistributedValidators_test : public beast::unit_test::suite
         HeartbeatTimer heart(sim.scheduler);
 
         // txs, start/stop/step, target
-        auto peerSelector = selector(peers.begin(),
+        auto peerSelector = makeSelector(peers.begin(),
                                      peers.end(),
                                      std::vector<double>(numPeers, 1.),
                                      sim.rng);
-        auto txSubmitter = submitter(ConstantDistribution{rate.inv()},
+        auto txSubmitter = makeSubmitter(ConstantDistribution{rate.inv()},
                                      sim.scheduler.now() + quiet,
                                      sim.scheduler.now() + simDuration - quiet,
                                      peerSelector,
@@ -258,22 +219,12 @@ class DistributedValidators_test : public beast::unit_test::suite
         txCollector.report(simDuration, log, true);
         ledgerCollector.report(simDuration, log, false);
 
-        std::string tag = std::to_string(numPeers);
+        std::string const tag = std::to_string(numPeers);
         txCollector.csv(simDuration, txLog, tag, printHeaders);
         ledgerCollector.csv(simDuration, ledgerLog, tag, printHeaders);
 
         log << std::endl;
     }
-
-    void
-    ringGrouped(std::size_t numGroups, std::size_t peersPerGroup)
-    {
-        log << "DistributedValidators_test::ringGrouped not implemented"
-            << std::endl;
-    }
-
-    // TODO: ring
-    // TODO: ringDirected
 
     void
     run() override
