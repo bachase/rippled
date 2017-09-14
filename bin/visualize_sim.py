@@ -8,8 +8,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 def plotGraph(report, keys):
     with open(report, 'rb') as csvfile:
-        csvReader = csv.reader(csvfile, delimiter=',', quotechar='|')
-        dictReader = csv.DictReader(csvfile, delimiter=',', quotechar='|')
+        csvReader = csv.reader(csvfile, delimiter='|', quotechar='$')
+        dictReader = csv.DictReader(csvfile, delimiter='|', quotechar='$')
 
         byN = dict()
         byDelay = dict()
@@ -45,7 +45,7 @@ def plotGraph(report, keys):
 
         for key in keys:
             plt.figure(key)
-            plt.plot(delays, values[key], label=str(numPeers))
+            plt.plot(delays, values[key], alpha=0.2, label=str(numPeers))
 
     pdf = PdfPages(report + ".pdf")
 
