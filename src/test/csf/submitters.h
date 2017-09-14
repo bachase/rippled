@@ -39,7 +39,13 @@ struct Rate
     double
     inv() const
     {
-        return duration.count()/double(count);
+        return duration.count()/static_cast<double>(count);
+    }
+
+    double
+    ratio() const
+    {
+        return static_cast<double>(count)/duration.count();
     }
 };
 

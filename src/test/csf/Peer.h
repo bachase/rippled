@@ -355,9 +355,15 @@ struct Peer
     */
 
     bool
-    connect(Peer & o, SimDuration dur)
+    connect(Peer & o, SimDuration const & delay)
     {
-        return net.connect(this, &o, dur);
+        return connect(o,
+                DurationDistribution{ConstantDuration{delay}});
+    }
+    bool
+    connect(Peer & o, DurationDistribution delayGen)
+    {
+        return net.connect(this, &o, delayGen);
     }
 
     /** Remove a network connection

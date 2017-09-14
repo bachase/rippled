@@ -383,52 +383,52 @@ struct TxCollector
 
         if(printHeaders)
         {
-            log << "tag" << ","
-                << "txNumSubmitted" << ","
-                << "txNumAccepted" << ","
-                << "txNumValidated" << ","
-                << "txNumOrphaned" << ","
-                << "txUnvalidated" << ","
-                << "txRateSumbitted" << ","
-                << "txRateAccepted" << ","
-                << "txRateValidated" << ","
-                << "txLatencySubmitToAccept10Pctl" << ","
-                << "txLatencySubmitToAccept50Pctl" << ","
-                << "txLatencySubmitToAccept90Pctl" << ","
-                << "txLatencySubmitToValidatet10Pctl" << ","
-                << "txLatencySubmitToValidatet50Pctl" << ","
-                << "txLatencySubmitToValidatet90Pctl"
+            log << "tag" << "|"
+                << "txNumSubmitted" << "|"
+                << "txNumAccepted" << "|"
+                << "txNumValidated" << "|"
+                << "txNumOrphaned" << "|"
+                << "txUnvalidated" << "|"
+                << "txRateSumbitted" << "|"
+                << "txRateAccepted" << "|"
+                << "txRateValidated" << "|"
+                << "txLatencySubmitToAccept10Pctl" << "|"
+                << "txLatencySubmitToAccept50Pctl" << "|"
+                << "txLatencySubmitToAccept90Pctl" << "|"
+                << "txLatencySubmitToValidate10Pctl" << "|"
+                << "txLatencySubmitToValidate50Pctl" << "|"
+                << "txLatencySubmitToValidate90Pctl"
                 << std::endl;
         }
 
 
-        log << tag << ","
+        log << tag << "|"
             // txNumSubmitted
-            << submitted << ","
+            << submitted << "|"
             // txNumAccepted
-            << accepted << ","
+            << accepted << "|"
             // txNumValidated
-            << validated << ","
+            << validated << "|"
             // txNumOrphaned
-            << orphaned() << ","
+            << orphaned() << "|"
             // txNumUnvalidated
-            << unvalidated() << ","
+            << unvalidated() << "|"
             // txRateSubmitted
-            << std::setprecision(2) << perSec(submitted) << ","
+            << std::setprecision(2) << perSec(submitted) << "|"
             // txRateAccepted
-            << std::setprecision(2) << perSec(accepted) << ","
+            << std::setprecision(2) << perSec(accepted) << "|"
             // txRateValidated
-            << std::setprecision(2) << perSec(validated) << ","
+            << std::setprecision(2) << perSec(validated) << "|"
             // txLatencySubmitToAccept10Pctl
-            << std::setprecision(2) << fmtS(submitToAccept.percentile(0.1f)) << ","
+            << std::setprecision(2) << fmtS(submitToAccept.percentile(0.1f)) << "|"
             // txLatencySubmitToAccept50Pctl
-            << std::setprecision(2) << fmtS(submitToAccept.percentile(0.5f)) << ","
+            << std::setprecision(2) << fmtS(submitToAccept.percentile(0.5f)) << "|"
             // txLatencySubmitToAccept90Pctl
-            << std::setprecision(2) << fmtS(submitToAccept.percentile(0.9f)) << ","
+            << std::setprecision(2) << fmtS(submitToAccept.percentile(0.9f)) << "|"
             // txLatencySubmitToValidate10Pctl
-            << std::setprecision(2) << fmtS(submitToValidate.percentile(0.1f)) << ","
+            << std::setprecision(2) << fmtS(submitToValidate.percentile(0.1f)) << "|"
             // txLatencySubmitToValidate50Pctl
-            << std::setprecision(2) << fmtS(submitToValidate.percentile(0.5f)) << ","
+            << std::setprecision(2) << fmtS(submitToValidate.percentile(0.5f)) << "|"
             // txLatencySubmitToValidate90Pctl
             << std::setprecision(2) << fmtS(submitToValidate.percentile(0.9f)) << ","
             << std::endl;
@@ -619,39 +619,39 @@ struct LedgerCollector
 
         if(printHeaders)
         {
-            log << "tag" << ","
-                << "ledgerNumAccepted" << ","
-                << "ledgerNumFullyValidated" << ","
-                << "ledgerRateAccepted" << ","
-                << "ledgerRateFullyValidated" << ","
-                << "ledgerLatencyAcceptToAccept10Pctl" << ","
-                << "ledgerLatencyAcceptToAccept50Pctl" << ","
-                << "ledgerLatencyAcceptToAccept90Pctl" << ","
-                << "ledgerLatencyFullyValidToFullyValid10Pctl" << ","
-                << "ledgerLatencyFullyValidToFullyValid50Pctl" << ","
+            log << "tag" << "|"
+                << "ledgerNumAccepted" << "|"
+                << "ledgerNumFullyValidated" << "|"
+                << "ledgerRateAccepted" << "|"
+                << "ledgerRateFullyValidated" << "|"
+                << "ledgerLatencyAcceptToAccept10Pctl" << "|"
+                << "ledgerLatencyAcceptToAccept50Pctl" << "|"
+                << "ledgerLatencyAcceptToAccept90Pctl" << "|"
+                << "ledgerLatencyFullyValidToFullyValid10Pctl" << "|"
+                << "ledgerLatencyFullyValidToFullyValid50Pctl" << "|"
                 << "ledgerLatencyFullyValidToFullyValid90Pctl"
                 << std::endl;
         }
 
-        log << tag << ","
+        log << tag << "|"
             // ledgerNumAccepted
-            << accepted << ","
+            << accepted << "|"
             // ledgerNumFullyValidated
-            << fullyValidated << ","
+            << fullyValidated << "|"
             // ledgerRateAccepted
-            << std::setprecision(2) << perSec(accepted) << ","
+            << std::setprecision(2) << perSec(accepted) << "|"
             // ledgerRateFullyValidated
-            << std::setprecision(2) << perSec(fullyValidated) << ","
+            << std::setprecision(2) << perSec(fullyValidated) << "|"
             // ledgerLatencyAcceptToAccept10Pctl
-            << std::setprecision(2) << fmtS(acceptToAccept.percentile(0.1f)) << ","
+            << std::setprecision(2) << fmtS(acceptToAccept.percentile(0.1f)) << "|"
             // ledgerLatencyAcceptToAccept50Pctl
-            << std::setprecision(2) << fmtS(acceptToAccept.percentile(0.5f)) << ","
+            << std::setprecision(2) << fmtS(acceptToAccept.percentile(0.5f)) << "|"
             // ledgerLatencyAcceptToAccept90Pctl
-            << std::setprecision(2) << fmtS(acceptToAccept.percentile(0.9f)) << ","
+            << std::setprecision(2) << fmtS(acceptToAccept.percentile(0.9f)) << "|"
             // ledgerLatencyFullyValidToFullyValid10Pctl
-            << std::setprecision(2) << fmtS(fullyValidToFullyValid.percentile(0.1f)) << ","
+            << std::setprecision(2) << fmtS(fullyValidToFullyValid.percentile(0.1f)) << "|"
             // ledgerLatencyFullyValidToFullyValid50Pctl
-            << std::setprecision(2) << fmtS(fullyValidToFullyValid.percentile(0.5f)) << ","
+            << std::setprecision(2) << fmtS(fullyValidToFullyValid.percentile(0.5f)) << "|"
             // ledgerLatencyFullyValidToFullyValid90Pctl
             << std::setprecision(2) << fmtS(fullyValidToFullyValid.percentile(0.9f))
             << std::endl;
