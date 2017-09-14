@@ -43,7 +43,8 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
     void
     completeTrustCompleteConnectNormalDelay(
             std::size_t numPeers,
-            std::chrono::milliseconds delay = std::chrono::milliseconds(200),
+            std::chrono::milliseconds delay,
+            std::chrono::milliseconds simDuration,
             bool printHeaders = false)
     {
         using namespace csf;
@@ -76,8 +77,8 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
 
         // complete connect graph with fixed delay
         //    - delay for a given message; avg in ms, stddev in ms
-        SimDuration avgConnectionDelay = 200ms;
-        SimDuration stddevConnectionDelay = 60ms;
+        SimDuration avgConnectionDelay = delay;
+        SimDuration stddevConnectionDelay = delay / 8;
         std::normal_distribution<double> delayDistr(
                 avgConnectionDelay.count(),
                 stddevConnectionDelay.count());
@@ -109,8 +110,8 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
                                      std::vector<double>(numPeers, 1.),
                                      sim.rng);
         auto txSubmitter = makeSubmitter(submissionInterval,
-                                     sim.scheduler.now() + quiet,
-                                     sim.scheduler.now() + simDuration - quiet,
+                                     sim.scheduler.now(),
+                                     sim.scheduler.now() + simDuration,
                                      peerSelector,
                                      sim.scheduler,
                                      sim.rng);
@@ -150,7 +151,8 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
     void
     completeTrustScaleFreeConnectNormalDelay(
             std::size_t numPeers,
-            std::chrono::milliseconds delay = std::chrono::milliseconds(200),
+            std::chrono::milliseconds delay,
+            std::chrono::milliseconds simDuration,
             bool printHeaders = false)
     {
         using namespace csf;
@@ -189,8 +191,8 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
         peers.trust(peers);
 
         // scale-free connect graph with fixed delay
-        SimDuration const avgConnectionDelay = 200ms;
-        SimDuration const stddevConnectionDelay = 60ms;
+        SimDuration const avgConnectionDelay = delay;
+        SimDuration const stddevConnectionDelay = delay / 8;
         std::normal_distribution<double> delayDistr(
                 avgConnectionDelay.count(),
                 stddevConnectionDelay.count());
@@ -226,8 +228,8 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
                                      ranks,
                                      sim.rng);
         auto txSubmitter = makeSubmitter(submissionInterval,
-                                     sim.scheduler.now() + quiet,
-                                     sim.scheduler.now() + simDuration - quiet,
+                                     sim.scheduler.now(),
+                                     sim.scheduler.now() + simDuration,
                                      peerSelector,
                                      sim.scheduler,
                                      sim.rng);
@@ -274,21 +276,23 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
     void
     run() override
     {
-        std::string defaultArgs = "4 5 100 200";
+        std::string defaultArgs = "4 5 10000 100 200";
         std::string args = arg().empty() ? defaultArgs : arg();
         std::stringstream argStream(args);
 
         int maxThreads = 0;
         int maxNumValidators = 0;
+        std::chrono::milliseconds simDuration;
         std::vector<std::chrono::milliseconds> delays;
 
+        int simDurationCount(10000);
         int delayCount(200);
         argStream >> maxThreads;
         argStream >> maxNumValidators;
+        argStream >> simDurationCount;
+        simDuration = std::chrono::milliseconds(simDurationCount);
         while(argStream >> delayCount)
             delays.emplace_back(delayCount);
-
-        std::chrono::milliseconds delay(delayCount);
 
         log << "DistributedValidatorsSim: 1 to " << maxNumValidators << " Peers"
             << " on " << maxThreads << " threads." << std::endl;
@@ -321,7 +325,7 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
                          i++, j++)
                     {
                         threads[j] = std::thread(f, this,
-                                i, delay, printHeaders);
+                                i, delay, simDuration, printHeaders);
                         printHeaders = false;
                     }
                     for (int k = 0; k < maxThreads; k++)
