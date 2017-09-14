@@ -86,20 +86,22 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
         // Initial round to set prior state
         sim.run(1);
 
+        // Initialize timers
+        HeartbeatTimer heart(sim.scheduler);
+
         // Run for 10 minues, submitting 100 tx/second
         std::chrono::nanoseconds const simDuration = 10min;
         std::chrono::nanoseconds const quiet = 10s;
-        Rate const rate{100, 1000ms};
-
-        // Initialize timers
-        HeartbeatTimer heart(sim.scheduler);
+        Rate const avgSubmissionRate{100, 1000ms};
+        std::exponential_distribution<double> submissionInterval(
+                avgSubmissionRate.ratio());
 
         // txs, start/stop/step, target
         auto peerSelector = makeSelector(peers.begin(),
                                      peers.end(),
                                      std::vector<double>(numPeers, 1.),
                                      sim.rng);
-        auto txSubmitter = makeSubmitter(ConstantDistribution{rate.inv()},
+        auto txSubmitter = makeSubmitter(submissionInterval,
                                      sim.scheduler.now() + quiet,
                                      sim.scheduler.now() + simDuration - quiet,
                                      peerSelector,
@@ -195,20 +197,22 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
         // Initial round to set prior state
         sim.run(1);
 
-        // Run for 10 minues, submitting 100 tx/second
-        std::chrono::nanoseconds simDuration = 10min;
-        std::chrono::nanoseconds quiet = 10s;
-        Rate rate{100, 1000ms};
-
         // Initialize timers
         HeartbeatTimer heart(sim.scheduler);
+
+        // Run for 10 minues, submitting 100 tx/second
+        std::chrono::nanoseconds const simDuration = 10min;
+        std::chrono::nanoseconds const quiet = 10s;
+        Rate const avgSubmissionRate{100, 1000ms};
+        std::exponential_distribution<double> submissionInterval(
+                avgSubmissionRate.ratio());
 
         // txs, start/stop/step, target
         auto peerSelector = makeSelector(peers.begin(),
                                      peers.end(),
-                                     std::vector<double>(numPeers, 1.),
+                                     ranks,
                                      sim.rng);
-        auto txSubmitter = makeSubmitter(ConstantDistribution{rate.inv()},
+        auto txSubmitter = makeSubmitter(submissionInterval,
                                      sim.scheduler.now() + quiet,
                                      sim.scheduler.now() + simDuration - quiet,
                                      peerSelector,
