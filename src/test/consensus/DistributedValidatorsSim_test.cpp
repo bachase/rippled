@@ -41,7 +41,7 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
     std::mutex mutex;
 
     void
-    completeTrustCompleteConnectFixedDelay(
+    completeTrustCompleteConnectNormalDelay(
             std::size_t numPeers,
             std::chrono::milliseconds delay = std::chrono::milliseconds(200),
             bool printHeaders = false)
@@ -52,7 +52,7 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
         // Initialize persistent collector logs specific to this method
         std::string const prefix =
                 "DistributedValidatorsSim_"
-                "completeTrustCompleteConnectFixedDelay";
+                "completeTrustCompleteConnectNormalDelay";
         std::fstream
                 txLog(prefix + "_tx.csv", std::ofstream::app),
                 ledgerLog(prefix + "_ledger.csv", std::ofstream::app);
@@ -75,7 +75,14 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
         peers.trust(peers);
 
         // complete connect graph with fixed delay
-        peers.connect(peers, delay);
+        //    - delay for a given message; avg in ms, stddev in ms
+        SimDuration avgConnectionDelay = 200ms;
+        SimDuration stddevConnectionDelay = 60ms;
+        std::normal_distribution<double> delayDistr(
+                avgConnectionDelay.count(),
+                stddevConnectionDelay.count());
+        DurationDistribution delayGen{randomDuration(delayDistr, sim.rng)};
+        peers.connect(peers, delayGen);
 
         // Initialize collectors to track statistics to report
         TxCollector txCollector;
@@ -141,7 +148,7 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
     }
 
     void
-    completeTrustScaleFreeConnectFixedDelay(
+    completeTrustScaleFreeConnectNormalDelay(
             std::size_t numPeers,
             std::chrono::milliseconds delay = std::chrono::milliseconds(200),
             bool printHeaders = false)
@@ -152,7 +159,7 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
         // Initialize persistent collector logs specific to this method
         std::string const prefix =
                 "DistributedValidatorsSim_"
-                "completeTrustScaleFreeConnectFixedDelay";
+                "completeTrustScaleFreeConnectNormalDelay";
         std::fstream
                 txLog(prefix + "_tx.csv", std::ofstream::app),
                 ledgerLog(prefix + "_ledger.csv", std::ofstream::app);
@@ -182,11 +189,17 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
         peers.trust(peers);
 
         // scale-free connect graph with fixed delay
+        SimDuration const avgConnectionDelay = 200ms;
+        SimDuration const stddevConnectionDelay = 60ms;
+        std::normal_distribution<double> delayDistr(
+                avgConnectionDelay.count(),
+                stddevConnectionDelay.count());
+        DurationDistribution delayGen{randomDuration(delayDistr, sim.rng)};
         std::vector<double> const ranks =
                 sample(peers.size(), PowerLawDistribution{1, 3}, sim.rng);
         randomRankedConnect(peers, ranks, numCNLs,
                 std::uniform_int_distribution<>{minCNLSize, maxCNLSize},
-                sim.rng, delay);
+                sim.rng, delayGen);
 
         // Initialize collectors to track statistics to report
         TxCollector txCollector;
@@ -252,6 +265,13 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
     }
 
     void
+    ringGrouped(std::size_t numGroups, std::size_t peersPerGroup)
+    {
+        log << "DistributedValidatorsSim_test::ringGrouped not implemented"
+            << std::endl;
+    }
+
+    void
     run() override
     {
         std::string defaultArgs = "4 5 100 200";
@@ -275,57 +295,44 @@ class DistributedValidatorsSim_test : public beast::unit_test::suite
 
         /**
          * Simulate with N = 1 to N
-         * - complete trust graph is complete
-         * - complete network connectivity
-         * - fixed delay for network links
+         *  completeTrustCompleteConnectNormalDelay
+         *      - complete trust graph
+         *      - complete network connectivity
+         *      - normal delay for network links
+         *  completeTrustScaleFreeConnectNormalDelay
+         *      - scale-free trust graph
+         *      - complete network connectivity
+         *      - normal delay for network links
          */
-        bool printHeaders = true;
-        std::vector<std::thread> threads(maxThreads);
-        for(auto delay : delays)
+
+        for(auto f : {
+                &DistributedValidatorsSim_test
+                        ::completeTrustCompleteConnectNormalDelay,
+                &DistributedValidatorsSim_test
+                        ::completeTrustScaleFreeConnectNormalDelay})
         {
-            for(int i = 1; i <= maxNumValidators;)
+            bool printHeaders = true;
+            std::vector<std::thread> threads(maxThreads);
+            for (auto delay : delays)
             {
-                for(int j = 0; j < maxThreads && i <= maxNumValidators;
-                        i++, j++)
+                for (int i = 1; i <= maxNumValidators;)
                 {
-                    threads[j] = std::thread(
-                            &DistributedValidatorsSim_test::
-                                completeTrustCompleteConnectFixedDelay,
-                            this, i, delay, printHeaders);
-                    printHeaders = false;
+                    for (int j = 0; j < maxThreads && i <= maxNumValidators;
+                         i++, j++)
+                    {
+                        threads[j] = std::thread(f, this,
+                                i, delay, printHeaders);
+                        printHeaders = false;
+                    }
+                    for (int k = 0; k < maxThreads; k++)
+                        if (threads[k].joinable())
+                            threads[k].join();
                 }
-                for(int k = 0; k < maxThreads; k++)
-                    if(threads[k].joinable())
-                        threads[k].join();
             }
         }
 
-        /**
-         * Simulate with N = 1 to N
-         * - complete trust graph is complete
-         * - scale-free network connectivity
-         * - fixed delay for network links
-         */
-        printHeaders = true;
-        for(auto delay : delays)
-        {
-            for(int i = 1; i <= maxNumValidators;)
-            {
-                for(int j = 0; j < maxThreads && i <= maxNumValidators;
-                        i++, j++)
-                {
-                    threads[j] = std::thread(
-                            &DistributedValidatorsSim_test::
-                                completeTrustScaleFreeConnectFixedDelay,
-                            this, i, delay, printHeaders);
-                    printHeaders = false;
-                }
-                for(int k = 0; k < maxThreads; k++)
-                    if(threads[k].joinable())
-                        threads[k].join();
-            }
-        }
     }
+
 };
 
 BEAST_DEFINE_TESTSUITE_MANUAL(DistributedValidatorsSim, consensus, ripple);

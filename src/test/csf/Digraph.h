@@ -180,6 +180,7 @@ public:
     };
 
     /** Range of out edges
+     *
 
         @param source The source vertex
         @return A boost transformed range of Edge type for all out edges of

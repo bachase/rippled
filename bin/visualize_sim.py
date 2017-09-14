@@ -54,7 +54,7 @@ def plotGraph(report, keys):
         plt.title(report + "\n" + key)
         plt.xlabel("delays")
         plt.ylabel(key)
-        plt.legend(loc='best')
+        #plt.legend(loc='best')
 
         pdf.savefig(fig)
     pdf.close()

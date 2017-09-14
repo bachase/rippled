@@ -154,7 +154,14 @@ public:
 
     */
     void
-    connect(PeerGroup const& o, SimDuration delay)
+    connect(PeerGroup const& o, SimDuration const & delay)
+    {
+        return connect(o,
+                DurationDistribution{ConstantDuration{delay}});
+    }
+
+    void
+    connect(PeerGroup const& o, DurationDistribution delayGen)
     {
         for(Peer * p : peers_)
         {
@@ -162,7 +169,7 @@ public:
             {
                 // cannot send messages to self over network
                 if(p != target)
-                    p->connect(*target, delay);
+                    p->connect(*target, delayGen);
             }
         }
     }
@@ -194,11 +201,19 @@ public:
         @param delay The fixed messaging delay for all established connections
     */
     void
-    trustAndConnect(PeerGroup const & o, SimDuration delay)
+    trustAndConnect(PeerGroup const & o, SimDuration const & delay)
+    {
+        return trustAndConnect(o,
+                DurationDistribution{ConstantDuration{delay}});
+    }
+
+    void
+    trustAndConnect(PeerGroup const & o, DurationDistribution delayGen)
     {
         trust(o);
-        connect(o, delay);
+        connect(o, delayGen);
     }
+
 
     /** Establish network connections based on trust relations
 
@@ -210,13 +225,20 @@ public:
 
     */
     void
-    connectFromTrust(SimDuration delay)
+    connectFromTrust(SimDuration const & delay)
+    {
+        return connectFromTrust(
+                DurationDistribution{ConstantDuration{delay}});
+    }
+
+    void
+    connectFromTrust(DurationDistribution delayGen)
     {
         for (Peer * peer : peers_)
         {
             for (Peer * to : peer->trustGraph.trustedPeers(peer))
             {
-                peer->connect(*to, delay);
+                peer->connect(*to, delayGen);
             }
         }
     }
@@ -350,7 +372,7 @@ randomRankedConnect(
     int numGroups,
     RandomNumberDistribution sizeDist,
     Generator& g,
-    SimDuration delay)
+    DurationDistribution delayGen)
 {
     std::vector<PeerGroup> const groups =
         randomRankedGroups(peers, ranks, numGroups, sizeDist, g);
@@ -359,7 +381,7 @@ randomRankedConnect(
     for(auto & peer : peers)
     {
         for(auto & target : groups[u(g)])
-             peer->connect(*target, delay);
+             peer->connect(*target, delayGen);
     }
 }
 
