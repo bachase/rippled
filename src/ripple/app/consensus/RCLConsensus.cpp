@@ -152,6 +152,7 @@ RCLConsensus::Adaptor::relay(RCLCxTx const& tx)
     // If we didn't relay this transaction recently, relay it to all peers
     if (app_.getHashRouter().shouldRelay(tx.id()))
     {
+      JLOG(j_.debug()) << "Relaying disputed tx " << tx.id();
         auto const slice = tx.tx_.slice();
         protocol::TMTransaction msg;
         msg.set_rawtransaction(slice.data(), slice.size());
@@ -161,6 +162,10 @@ RCLConsensus::Adaptor::relay(RCLCxTx const& tx)
         app_.overlay().foreach (send_always(
             std::make_shared<Message>(msg, protocol::mtTRANSACTION)));
     }
+    else
+      {
+        JLOG(j_.debug()) << "Not relaying disputedtx " << tx.id();
+      }
 }
 void
 RCLConsensus::Adaptor::propose(RCLCxPeerPos::Proposal const& proposal)
@@ -301,6 +306,7 @@ RCLConsensus::Adaptor::onClose(
     // Build SHAMap containing all transactions in our open ledger
     for (auto const& tx : initialLedger->txs)
     {
+      JLOG(j_.debug()) << "Adding open ledger TX " << tx.first->getTransactionID();
         Serializer s(2048);
         tx.first->add(s);
         initialSet->addItem(
@@ -489,7 +495,7 @@ RCLConsensus::Adaptor::doAccept(
                 {
                     JLOG(j_.debug())
                         << "Test applying disputed transaction that did"
-                        << " not get in";
+                        << " not get in " << it.second.tx().id();
 
                     SerialIter sit(it.second.tx().tx_.slice());
                     auto txn = std::make_shared<STTx const>(sit);
