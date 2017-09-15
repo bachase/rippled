@@ -214,7 +214,7 @@ public:
             The clock is advanced to the time
             of the last delivered event.
 
-        @return `true` if a event was processed.
+        @return `true` if an event was processed.
     */
     bool
     step_one();

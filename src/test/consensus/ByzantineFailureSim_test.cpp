@@ -38,9 +38,10 @@ class ByzantineFailureSim_test : public beast::unit_test::suite
         // an extra non-consensus transaction).
 
         Sim sim;
-        ConsensusParms parms;
+        ConsensusParms const parms;
 
-        SimDuration delay = round<milliseconds>(0.2 * parms.ledgerGRANULARITY);
+        SimDuration const delay =
+            round<milliseconds>(0.2 * parms.ledgerGRANULARITY);
         PeerGroup a = sim.createGroup(1);
         PeerGroup b = sim.createGroup(1);
         PeerGroup c = sim.createGroup(1);

@@ -229,8 +229,8 @@ class DistributedValidators_test : public beast::unit_test::suite
     void
     run() override
     {
-        std::string defaultArgs = "5 200";
-        std::string args = arg().empty() ? defaultArgs : arg();
+        std::string const defaultArgs = "5 200";
+        std::string const args = arg().empty() ? defaultArgs : arg();
         std::stringstream argStream(args);
 
         int maxNumValidators = 0;
@@ -238,7 +238,7 @@ class DistributedValidators_test : public beast::unit_test::suite
         argStream >> maxNumValidators;
         argStream >> delayCount;
 
-        std::chrono::milliseconds delay(delayCount);
+        std::chrono::milliseconds const delay(delayCount);
 
         log << "DistributedValidators: 1 to " << maxNumValidators << " Peers"
             << std::endl;

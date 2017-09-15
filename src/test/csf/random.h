@@ -56,17 +56,17 @@ random_weighted_shuffle(std::vector<T> v, std::vector<double> w, G& g)
 /** Generate a vector of random samples
 
     @param size the size of the sample
-    @param pdf the distribution to sample
+    @param dist the distribution to sample
     @param g the pseudo-random number generator
 
     @return vector of samples
 */
-template <class PDF, class Generator>
-std::vector<typename PDF::result_type>
-sample( std::size_t size, PDF pdf, Generator& g)
+template <class RandomNumberDistribution, class Generator>
+std::vector<typename RandomNumberDistribution::result_type>
+sample( std::size_t size, RandomNumberDistribution dist, Generator& g)
 {
-    std::vector<typename PDF::result_type> res(size);
-    std::generate(res.begin(), res.end(), [&pdf, &g]() { return pdf(g); });
+    std::vector<typename RandomNumberDistribution::result_type> res(size);
+    std::generate(res.begin(), res.end(), [&dist, &g]() { return dist(g); });
     return res;
 }
 

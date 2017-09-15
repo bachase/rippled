@@ -42,7 +42,7 @@ struct NoEdgeData
 
 /** Directed graph
 
-Basic directed graph that uses an adjacency lists to represent out edges.
+Basic directed graph that uses an adjacency list to represent out edges.
 
 Instances of Vertex uniquely identify vertices in the graph. Instances of
 EdgeData is any data to store in the edge connecting two vertices.

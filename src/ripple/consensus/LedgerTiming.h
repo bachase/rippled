@@ -63,7 +63,7 @@ auto constexpr decreaseLedgerTimeResolutionEvery = 1;
          from @ref ledgerPossibleTimeResolutions
 
     @tparam Rep Type representing number of ticks in std::chrono::duration
-    @tparam Period An std::ratioe representing tick period in
+    @tparam Period An std::ratio representing tick period in
                    std::chrono::duration
     @tparam Seq Unsigned integer-like type corresponding to the ledger sequence
                 number. It should be comparable to 0 and support modular
