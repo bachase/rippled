@@ -71,6 +71,15 @@ struct ValidationParms
         for a reasonable interval.
     */
     std::chrono::seconds validationSET_EXPIRES = std::chrono::minutes{10};
+
+
+    /** Minimum seqeuence number re-issuing gap
+
+        A full validation can only be issued if its sequence number is larger
+        than the last issued full validation, or more than this gap less.
+    */
+    std::uint32_t validationREISSUE_SEQ_GAP = 10;
+
 };
 
 
@@ -101,6 +110,28 @@ isCurrent(
         (signTime < (now + p.validationCURRENT_WALL)) &&
         ((seenTime == NetClock::time_point{}) ||
          (seenTime < (now + p.validationCURRENT_LOCAL)));
+}
+
+/** Whether we should validate the given ledger sequence number
+
+    Ensures we do not reissue a validation for a sequence number we
+    recently validated.
+
+    @param p Validation parms with gap parameter
+    @param lastSent The sequence number of the last validation's ledger
+    @param currSeq The current sequence number of the ledger we want to validate
+    @return Whether we can issue the validation; if false, a partial validation
+            is allowed
+*/
+template <class Seq>
+inline bool
+canValidateLedgerSeq(
+    ValidationParms const& p,
+    Seq const lastSent,
+    Seq const curr)
+{
+    return (curr > lastSent) ||
+        (curr + Seq(p.validationREISSUE_SEQ_GAP) < lastSent);
 }
 
 /** Determine the preferred ledger based on its support
@@ -150,7 +181,7 @@ getPreferredLedger(
 
     @warning The MutexType is used to manage concurrent access to private
              members of Validations but does not manage any data in the
-             StalePolicy instance.
+             Policy instance.
 
     @code
 
@@ -189,7 +220,7 @@ getPreferredLedger(
         // ... implementation specific
     };
 
-    class StalePolicy
+    class Policy
     {
         // Handle a newly stale validation, this should do minimal work since
         // it is called by Validations while it may be iterating Validations
@@ -202,16 +233,19 @@ getPreferredLedger(
         // Return the current network time (used to determine staleness)
         NetClock::time_point now() const;
 
+        ValidationParms parms();
+
         // ... implementation specific
     };
     @endcode
 
-    @tparam StalePolicy Determines how to determine and handle stale validations
+    @tparam Policy Determines how to determine and handle stale validations
+                   and provides ValidationParms
     @tparam Validation Conforming type representing a ledger validation
     @tparam MutexType Mutex used to manage concurrent access
 
 */
-template <class StalePolicy, class Validation, class MutexType>
+template <class Policy, class Validation, class MutexType>
 class Validations
 {
     template <typename T>
@@ -254,14 +288,11 @@ class Validations
         beast::uhash<>>
         byLedger_;
 
-    //! Parameters to determine validation staleness
-    ValidationParms const parms_;
-
     beast::Journal j_;
 
-    //! StalePolicy details providing now(), onStale() and flush() callbacks
+    //! Policy details providing now(), onStale() and flush(),parms() callbacks
     //! Is NOT managed by the mutex_ above
-    StalePolicy stalePolicy_;
+    Policy policy_;
 
 private:
     /** Iterate current validations.
@@ -293,10 +324,10 @@ private:
             // Check for staleness, if time specified
             if (t &&
                 !isCurrent(
-                    parms_, *t, it->second.val.signTime(), it->second.val.seenTime()))
+                    parms(), *t, it->second.val.signTime(), it->second.val.seenTime()))
             {
                 // contains a stale record
-                stalePolicy_.onStale(std::move(it->second.val));
+                policy_.onStale(std::move(it->second.val));
                 it = current_.erase(it);
             }
             else
@@ -342,15 +373,14 @@ public:
         @param p ValidationParms to control staleness/expiration of validaitons
         @param c Clock to use for expiring validations stored by ledger
         @param j Journal used for logging
-        @param ts Parameters for constructing StalePolicy instance
+        @param ts Parameters for constructing Policy instance
     */
     template <class... Ts>
     Validations(
-        ValidationParms const& p,
         beast::abstract_clock<std::chrono::steady_clock>& c,
         beast::Journal j,
         Ts&&... ts)
-        : byLedger_(c), parms_(p), j_(j), stalePolicy_(std::forward<Ts>(ts)...)
+        : byLedger_(c), j_(j), policy_(std::forward<Ts>(ts)...)
     {
     }
 
@@ -359,7 +389,7 @@ public:
     ValidationParms const&
     parms() const
     {
-        return parms_;
+        return policy_.parms();
     }
 
     /** Return the journal
@@ -399,8 +429,8 @@ public:
     AddOutcome
     add(NodeKey const& key, Validation const& val)
     {
-        NetClock::time_point t = stalePolicy_.now();
-        if (!isCurrent(parms_, t, val.signTime(), val.seenTime()))
+        NetClock::time_point t = policy_.now();
+        if (!isCurrent(parms(), t, val.signTime(), val.seenTime()))
             return AddOutcome::stale;
 
         LedgerID const& id = val.ledgerID();
@@ -500,7 +530,7 @@ public:
         // Handle the newly stale validation outside the lock
         if (maybeStaleValidation)
         {
-            stalePolicy_.onStale(std::move(*maybeStaleValidation));
+            policy_.onStale(std::move(*maybeStaleValidation));
         }
 
         return result;
@@ -515,7 +545,7 @@ public:
     expire()
     {
         ScopedLock lock{mutex_};
-        beast::expire(byLedger_, parms_.validationSET_EXPIRES);
+        beast::expire(byLedger_, parms().validationSET_EXPIRES);
     }
 
     /** Distribution of current trusted validations
@@ -543,7 +573,7 @@ public:
         hash_map<LedgerID, std::uint32_t> ret;
 
         current(
-            stalePolicy_.now(),
+            policy_.now(),
             // The number of validations does not correspond to the number of
             // distinct ledgerIDs so we do not call reserve on ret.
             [](std::size_t) {},
@@ -624,7 +654,7 @@ public:
         std::vector<WrappedValidationType> ret;
 
         current(
-            stalePolicy_.now(),
+            policy_.now(),
             [&](std::size_t numValidations) { ret.reserve(numValidations); },
             [&](NodeKey const&, ValidationAndPrevID const& v) {
                 if (v.val.trusted())
@@ -643,7 +673,7 @@ public:
     {
         hash_set<NodeKey> ret;
         current(
-            stalePolicy_.now(),
+            policy_.now(),
             [&](std::size_t numValidations) { ret.reserve(numValidations); },
             [&](NodeKey const& k, ValidationAndPrevID const&) { ret.insert(k); });
 
@@ -751,7 +781,7 @@ public:
             current_.clear();
         }
 
-        stalePolicy_.flush(std::move(flushed));
+        policy_.flush(std::move(flushed));
 
         JLOG(j_.debug()) << "Validations flushed";
     }

@@ -824,16 +824,21 @@ RCLConsensus::Adaptor::buildLCL(
 }
 
 void
-RCLConsensus::Adaptor::validate(RCLCxLedger const& ledger, bool proposing)
+RCLConsensus::Adaptor::validate(RCLCxLedger const& ledger, bool const proposing)
 {
     auto validationTime = app_.timeKeeper().closeTime();
     if (validationTime <= lastValidationTime_)
         validationTime = lastValidationTime_ + 1s;
     lastValidationTime_ = validationTime;
 
+    const bool issueFull =
+        proposing &&
+        canValidateLedgerSeq(
+            app_.getValidations().parms(), lastValidatedSeq, ledger.seq());
+
     // Build validation
     auto v = std::make_shared<STValidation>(
-        ledger.id(), validationTime, valPublic_, proposing);
+        ledger.id(), validationTime, valPublic_, issueFull);
     v->setFieldU32(sfLedgerSequence, ledger.seq());
 
     // Add our load fee to the validation
@@ -862,6 +867,9 @@ RCLConsensus::Adaptor::validate(RCLCxLedger const& ledger, bool proposing)
     val.set_validation(&validation[0], validation.size());
     // Send signed validation to all of our directly connected peers
     app_.overlay().send(val);
+
+    if(issueFull)
+        lastValidatedSeq = ledger.seq();
 }
 
 Json::Value

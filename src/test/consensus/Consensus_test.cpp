@@ -452,7 +452,7 @@ public:
             minority.trustAndConnect(minority + majorityA, delay);
             majority.trustAndConnect(majority, delay);
 
-            CollectByNode<JumpCollector> jumps;
+            CollectByPeer<JumpCollector> jumps;
             sim.collectors.add(jumps);
 
             BEAST_EXPECT(sim.trustGraph.canFork(parms.minCONSENSUS_PCT / 100.));
@@ -826,6 +826,86 @@ public:
     }
 
     void
+    testPeerAhead()
+    {
+        using namespace csf;
+        using namespace std::chrono;
+
+        // Simulate a single peer that is able to accept ledgers more quickly
+        // than the other peers and ends up racing ahead. This check verifies
+        // that the speedy peer does not continue to re-issue validations
+        // for ledgers with sequence numbers it just validated when it resets
+        // back to work on the common ledger of its peers.
+
+        // Run two versions
+        // 1. Ensure the speedy peer issues duplicate sequence number
+        //    validations when its ValidationParms are set different from the
+        //    default.
+        // 2. Using the default ValidationParms suppresses the duplicate
+        //    sequence number validations
+        for(const bool preventDupSeq : {false, true})
+        {
+            ConsensusParms parms;
+            Sim sim;
+
+            PeerGroup core = sim.createGroup(4);
+            PeerGroup speedy = sim.createGroup(1);
+            PeerGroup network = core + speedy;
+
+            CollectByPeer<ShareCollector<Validation>> validationsByPeer;
+            sim.collectors.add(validationsByPeer);
+
+            // Complete trust and network graph
+            network.trustAndConnect(
+                network, round<milliseconds>(0.2 * parms.ledgerGRANULARITY));
+
+            // The core peers take a long time to accept ledgers at the end
+            // of consensus
+            for (Peer* peer : core)
+                peer->delays.ledgerAccept = 7s;
+
+            // The speedy peer might not prevent revalidating ledger sequence
+            // numbers
+            if (!preventDupSeq)
+                speedy[0]->validationParms.validationREISSUE_SEQ_GAP = 0;
+
+            // Submit 1 tx/second to a random peer to ensure non-trivial
+            // consensus
+            Rate rate{1, 1000ms};
+            auto peerSelector = makeSelector(
+                network.begin(),
+                network.end(),
+                std::vector<double>(network.size(), 1.0),
+                sim.rng);
+            auto txSubmitter = makeSubmitter(
+                ConstantDistribution{rate.inv()},
+                sim.scheduler.now(),
+                sim.scheduler.now() + 5min,
+                peerSelector,
+                sim.scheduler,
+                sim.rng);
+
+            // Run for a few ledgers to exercise the logic
+            sim.run(5);
+
+            // Collect the speedy peer validations and check for duplicate
+            // sequence numbers
+            std::vector<Validation> const& speedyVals =
+                validationsByPeer[speedy[0]->id].shared;
+            std::vector<Ledger::Seq> seqs;
+            std::transform(
+                speedyVals.begin(),
+                speedyVals.end(),
+                std::back_inserter(seqs),
+                [](Validation const& a) { return a.seq(); });
+            std::sort(seqs.begin(),  seqs.end());
+            bool const hasDupSeqs =
+                std::adjacent_find(seqs.begin(), seqs.end()) != seqs.end();
+            BEAST_EXPECT(preventDupSeq != hasDupSeqs);
+        }
+    }
+
+    void
     run() override
     {
         testShouldCloseLedger();
@@ -839,6 +919,7 @@ public:
         testConsensusCloseTimeRounding();
         testFork();
         testHubNetwork();
+        testPeerAhead();
     }
 };
 

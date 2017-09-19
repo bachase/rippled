@@ -112,12 +112,14 @@ struct Peer
 
     /** Generic Validations policy that simply ignores recently stale validations
     */
-    class StalePolicy
+    struct ValidationsPolicy
     {
         Peer& p_;
 
-    public:
-        StalePolicy(Peer& p) : p_{p}
+        ValidationParms const & parms_;
+
+        ValidationsPolicy(Peer& p, ValidationParms const& vp)
+            : p_{p}, parms_{vp}
         {
         }
 
@@ -135,6 +137,12 @@ struct Peer
         void
         flush(hash_map<PeerKey, Validation>&& remaining)
         {
+        }
+
+        ValidationParms const&
+        parms() const
+        {
+            return parms_;
         }
     };
 
@@ -195,9 +203,12 @@ struct Peer
     hash_map<Ledger::ID, Ledger> ledgers;
 
     //! Validations from trusted nodes
-    Validations<StalePolicy, Validation, NotAMutex> validations;
+    Validations<ValidationsPolicy, Validation, NotAMutex> validations;
     using AddOutcome =
-        Validations<StalePolicy, Validation, NotAMutex>::AddOutcome;
+        Validations<ValidationsPolicy, Validation, NotAMutex>::AddOutcome;
+
+    //! Sequence number of last full validation issued by this Peer
+    Ledger::Seq lastFullValSeq{0};
 
     //! The most recent ledger that has been fully validated by the network from
     //! the perspective of this Peer
@@ -244,6 +255,9 @@ struct Peer
     // Simulation parameters
     ConsensusParms consensusParms;
 
+    // Validation parameterss
+    ValidationParms validationParms;
+
     //! The collectors to report events to
     CollectorRefs & collectors;
 
@@ -275,7 +289,7 @@ struct Peer
         , scheduler{s}
         , net{n}
         , trustGraph(tg)
-        , validations{ValidationParms{}, s.clock(), j, *this}
+        , validations{s.clock(), j, *this, validationParms}
         , collectors{c}
     {
         // All peers start from the default constructed genesis ledger
@@ -529,7 +543,10 @@ struct Peer
             bool const isCompatible =
                 oracle.isAncestor(fullyValidatedLedger, newLedger);
 
-            if (runAsValidator && isCompatible)
+            bool const isValidSeq = canValidateLedgerSeq(
+                validations.parms(), lastFullValSeq, newLedger.seq());
+
+            if (runAsValidator && isCompatible && isValidSeq)
             {
                 Validation v{newLedger.id(),
                              newLedger.seq(),
@@ -542,6 +559,7 @@ struct Peer
                 share(v);
                 // we trust ourselves
                 addTrustedValidation(v);
+                lastFullValSeq = newLedger.seq();
             }
 
             checkFullyValidated(newLedger);

@@ -66,6 +66,9 @@ class RCLConsensus
         LedgerHash acquiringLedger_;
         ConsensusParms parms_;
 
+        // Sequence number of last validated ledger
+        LedgerIndex lastValidatedSeq{0};
+
         // The timestamp of the last validation we used
         NetClock::time_point lastValidationTime_;
 
@@ -76,6 +79,8 @@ class RCLConsensus
         std::atomic<std::chrono::milliseconds> prevRoundTime_{
             std::chrono::milliseconds{0}};
         std::atomic<ConsensusMode> mode_{ConsensusMode::observing};
+
+
 
     public:
         using Ledger_t = RCLCxLedger;

@@ -125,6 +125,7 @@ class RCLValidationsPolicy
     using ScopedLockType = std::lock_guard<LockType>;
     using ScopedUnlockType = GenericScopedUnlock<LockType>;
 
+    ValidationParms parms_;
     Application& app_;
 
     // Lock for managing staleValidations_ and writing_
@@ -164,6 +165,14 @@ public:
     */
     void
     flush(hash_map<PublicKey, RCLValidation> && remaining);
+
+    /** Return the validation parameters for use by the generic implementation
+     */
+    ValidationParms const&
+    parms() const
+    {
+        return parms_;
+    }
 };
 
 

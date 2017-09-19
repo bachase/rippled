@@ -140,13 +140,14 @@ class Validations_test : public beast::unit_test::suite
 
     // Generic Validations policy that saves stale/flushed data into
     // a StaleData instance.
-    class StalePolicy
+    class Policy
     {
         StaleData& staleData_;
         clock_type& c_;
+        ValidationParms p_;
 
     public:
-        StalePolicy(StaleData& sd, clock_type& c) : staleData_{sd}, c_{c}
+        Policy(StaleData& sd, clock_type& c) : staleData_{sd}, c_{c}
         {
         }
 
@@ -167,6 +168,12 @@ class Validations_test : public beast::unit_test::suite
         {
             staleData_.flushed = std::move(remaining);
         }
+
+        ValidationParms const&
+        parms() const
+        {
+            return p_;
+        }
     };
 
     // Non-locking mutex to avoid locks in generic Validations
@@ -184,7 +191,7 @@ class Validations_test : public beast::unit_test::suite
     };
 
     // Specialize generic Validations using the above types
-    using TestValidations = Validations<StalePolicy, Validation, NotAMutex>;
+    using TestValidations = Validations<Policy, Validation, NotAMutex>;
 
     // Hoist enum for writing simpler tests
     using AddOutcome = TestValidations::AddOutcome;
@@ -194,14 +201,13 @@ class Validations_test : public beast::unit_test::suite
     class TestHarness
     {
         StaleData staleData_;
-        ValidationParms p_;
         beast::manual_clock<std::chrono::steady_clock> clock_;
         beast::Journal j_;
         TestValidations tv_;
         PeerID nextNodeId_{0};
 
     public:
-        TestHarness() : tv_(p_, clock_, j_, staleData_, clock_)
+        TestHarness() : tv_(clock_, j_, staleData_, clock_)
         {
         }
 
@@ -235,7 +241,7 @@ class Validations_test : public beast::unit_test::suite
         ValidationParms
         parms() const
         {
-            return p_;
+            return tv_.parms();
         }
 
         auto&
@@ -826,6 +832,25 @@ class Validations_test : public beast::unit_test::suite
     }
 
     void
+    testCanValidateLedgerSeq()
+    {
+        ValidationParms p;
+
+        // Can only validated later sequence numbers
+        BEAST_EXPECT(!canValidateLedgerSeq(p, 0, 0));
+        BEAST_EXPECT(canValidateLedgerSeq(p, 0, 1));
+        BEAST_EXPECT(canValidateLedgerSeq(p, 0, 5));
+        BEAST_EXPECT(!canValidateLedgerSeq(p, 5, 0));
+        BEAST_EXPECT(!canValidateLedgerSeq(p, 5, 1));
+        BEAST_EXPECT(11 > p.validationREISSUE_SEQ_GAP);
+        BEAST_EXPECT(
+            !canValidateLedgerSeq(p, 11u, 11u - p.validationREISSUE_SEQ_GAP));
+        // Or more than p.validationREISSUE_SEQ_GAP smaller
+        BEAST_EXPECT(
+            canValidateLedgerSeq(p, 11u, 11u - p.validationREISSUE_SEQ_GAP - 1u));
+    }
+
+    void
     run() override
     {
         testAddValidation();
@@ -838,6 +863,7 @@ class Validations_test : public beast::unit_test::suite
         testExpire();
         testFlush();
         testGetPreferredLedger();
+        testCanValidateLedgerSeq();
     }
 };
 

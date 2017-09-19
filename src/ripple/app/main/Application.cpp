@@ -478,8 +478,7 @@ public:
             stopwatch(), HashRouter::getDefaultHoldTime (),
             HashRouter::getDefaultRecoverLimit ()))
 
-        , mValidations (ValidationParms(),stopwatch(), logs_->journal("Validations"),
-            *this)
+        , mValidations (stopwatch(), logs_->journal("Validations"), *this)
 
         , m_loadManager (make_LoadManager (*this, *this, logs_->journal("LoadManager")))
 

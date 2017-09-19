@@ -110,7 +110,7 @@ makeCollectors(Cs&... cs)
     CollectorType should be default constructible.
 */
 template <class CollectorType>
-struct CollectByNode
+struct CollectByPeer
 {
     std::map<PeerID, CollectorType> byNode;
 
@@ -677,16 +677,19 @@ struct StreamCollector
     void
     on(PeerID who, SimTime when, AcceptLedger const& e)
     {
-        out << when.time_since_epoch().count() << ": Node " << who << " accepted "
-            << "L" << e.ledger.id() << " " << e.ledger.txs() << "\n";
+        out << when.time_since_epoch().count() << ": Node " << who
+            << " accepted "
+            << "L" << e.ledger.id() << "S" << e.ledger.seq() << " "
+            << e.ledger.txs() << "\n";
     }
 
     void
     on(PeerID who, SimTime when, FullyValidateLedger const& e)
     {
         out << when.time_since_epoch().count() << ": Node " << who
-            << " fully-validated " << "L"<< e.ledger.id() << " " << e.ledger.txs()
-            << "\n";
+            << " fully-validated "
+            << "L" << e.ledger.id() << "S" << e.ledger.seq() << " "
+            << e.ledger.txs() << "\n";
     }
 };
 
@@ -730,6 +733,28 @@ struct JumpCollector
         if (e.ledger.parentID() != e.prior.id())
             fullyValidatedJumps.emplace_back(
                 Jump{who, when, e.prior, e.ledger});
+    }
+};
+
+
+/** Collects all Share<V> events emitted in the simulation
+*/
+template <class V>
+struct ShareCollector
+{
+    std::vector<V> shared;
+
+    // Ignore most events by default
+    template <class E>
+    void
+    on(PeerID, SimTime, E const& e)
+    {
+    }
+
+    void
+    on(PeerID who, SimTime when, Share<V> const& e)
+    {
+        shared.push_back(e.val);
     }
 };
 
