@@ -35,7 +35,10 @@ class AccountCurrencies_test : public beast::unit_test::suite
 
         auto const alice = Account {"alice"};
         env.fund (XRP(10000), alice);
-        env.close ();
+        std::vector<uint256> ids;
+        for(auto const & tx : env.current()->txs)
+            ids.push_back(tx.first->getTransactionID());
+        env.close (env.now() + 5s, boost::none, ids);
 
         { // invalid ledger (hash)
             Json::Value params;
