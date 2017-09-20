@@ -272,10 +272,16 @@ public:
 
             The Application network time is set to
             the close time of the resulting ledger.
+
+            Any asDisputedTxIDs IDs that would have been
+            in the consensus set are instead treated as
+            disputed transactions that did not reach
+            consensus.
     */
     void
     close (NetClock::time_point closeTime,
-        boost::optional<std::chrono::milliseconds> consensusDelay = boost::none);
+        boost::optional<std::chrono::milliseconds> consensusDelay = boost::none,
+        std::vector<uint256> asDisputedTxIDs = {});
 
     /** Close and advance the ledger.
 

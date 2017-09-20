@@ -189,8 +189,13 @@ public:
         performs a virtual consensus round, with all the transactions we are
         proposing being accepted.
     */
+    virtual std::uint32_t acceptLedger () = 0;
+
+    /** Additonal interface for use in unit tests to control the consensus
+     * result */
     virtual std::uint32_t acceptLedger (
-        boost::optional<std::chrono::milliseconds> consensusDelay = boost::none) = 0;
+        boost::optional<std::chrono::milliseconds> consensusDelay,
+        std::vector<uint256> asDisputedTxIDs) = 0;
 
     virtual uint256 getConsensusLCL () = 0;
 

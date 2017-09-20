@@ -368,8 +368,12 @@ public:
     Json::Value getServerInfo (bool human, bool admin) override;
     void clearLedgerFetch () override;
     Json::Value getLedgerFetchInfo () override;
+
+    std::uint32_t acceptLedger () override;
     std::uint32_t acceptLedger (
-        boost::optional<std::chrono::milliseconds> consensusDelay) override;
+        boost::optional<std::chrono::milliseconds> consensusDelay,
+        std::vector<uint256> disputedTxHashes) override;
+
     uint256 getConsensusLCL () override;
     void reportFeeChange () override;
 
@@ -2741,8 +2745,13 @@ bool NetworkOPsImp::unsubBook (std::uint64_t uSeq, Book const& book)
     return true;
 }
 
+std::uint32_t NetworkOPsImp::acceptLedger ()
+{
+    return acceptLedger(boost::none, std::vector<uint256>{});
+}
 std::uint32_t NetworkOPsImp::acceptLedger (
-    boost::optional<std::chrono::milliseconds> consensusDelay)
+    boost::optional<std::chrono::milliseconds> consensusDelay,
+    std::vector<uint256> asDisputedTxIDs)
 {
     // This code-path is exclusively used when the server is in standalone
     // mode via `ledger_accept`
@@ -2754,7 +2763,8 @@ std::uint32_t NetworkOPsImp::acceptLedger (
     // FIXME Could we improve on this and remove the need for a specialized
     // API in Consensus?
     beginConsensus (m_ledgerMaster.getClosedLedger()->info().hash);
-    mConsensus->simulate (app_.timeKeeper().closeTime(), consensusDelay);
+    mConsensus->simulate(
+        app_.timeKeeper().closeTime(), consensusDelay, asDisputedTxIDs);
     return m_ledgerMaster.getCurrentLedger ()->info().seq;
 }
 

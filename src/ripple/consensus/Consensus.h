@@ -415,11 +415,14 @@ public:
        @param now The current network adjusted time.
        @param consensusDelay Duration to delay between closing and accepting the
                              ledger. Uses 100ms if unspecified.
+       @param disputedTxIDs Transactions IDs in the consensus set to instead
+                          treat as disputed and *not* in the consensus set
     */
     void
     simulate(
         NetClock::time_point const& now,
-        boost::optional<std::chrono::milliseconds> consensusDelay);
+        boost::optional<std::chrono::milliseconds> consensusDelay,
+        std::vector<typename Tx_t::ID> const & asDisputedTxIDs);
 
     /** Get the previous ledger ID.
 
@@ -891,7 +894,8 @@ template <class Derived, class Traits>
 void
 Consensus<Derived, Traits>::simulate(
     NetClock::time_point const& now,
-    boost::optional<std::chrono::milliseconds> consensusDelay)
+    boost::optional<std::chrono::milliseconds> consensusDelay,
+    std::vector<typename Tx_t::ID> const & asDisputedTxIDs)
 {
     std::lock_guard<std::recursive_mutex> _(*lock_);
 
@@ -902,6 +906,35 @@ Consensus<Derived, Traits>::simulate(
     prevProposers_ = peerProposals_.size();
     prevRoundTime_ = result_->roundTime.read();
     phase_ = Phase::accepted;
+
+    if(!asDisputedTxIDs.empty())
+    {
+        // Only allow disputedTxs when in a standalone configuration (this is
+        // currently the case since the RPC ledger_close admin command does not
+        // allow injecting disputedTxs)
+        assert(prevProposers_ == 0);
+
+        // Move any matching transactions from the consensus set to the dispute
+        // set
+        for (Tx_t::ID const & txID : asDisputedTxIDs)
+        {
+            using DTx = typename Result::Dispute_t;
+            if(auto tx = result_->set.find(txID))
+            {
+                result_->disputes.emplace(txID, DTx{*tx, false, j_});
+            }
+        }
+        typename TxSet_t::MutableTxSet mutableSet(result_->set);
+        for(Tx_t::ID const & txID : asDisputedTxIDs)
+            mutableSet.erase(txID);
+        // Update the consensu set and position
+        result_->set = TxSet_t{mutableSet};
+        result_->position.changePosition(
+            result_->set.id(), result_->position.closeTime(), now_);
+    }
+    // Ensure
+
+
     impl().onForceAccept(
         *result_, previousLedger_, closeResolution_, rawCloseTimes_, mode_);
     JLOG(j_.info()) << "Simulation complete";

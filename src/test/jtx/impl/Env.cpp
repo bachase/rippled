@@ -173,15 +173,16 @@ Env::closed()
 
 void
 Env::close(NetClock::time_point closeTime,
-    boost::optional<std::chrono::milliseconds> consensusDelay)
+    boost::optional<std::chrono::milliseconds> consensusDelay,
+    std::vector<uint256> asDisputedTxIDs)
 {
     // Round up to next distinguishable value
     closeTime += closed()->info().closeTimeResolution - 1s;
     timeKeeper().set(closeTime);
     // Go through the rpc interface unless we need to simulate
     // a specific consensus delay.
-    if (consensusDelay)
-        app().getOPs().acceptLedger(consensusDelay);
+    if (consensusDelay || !asDisputedTxIDs.empty())
+        app().getOPs().acceptLedger(consensusDelay, asDisputedTxIDs);
     else
     {
         rpc("ledger_accept");
