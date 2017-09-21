@@ -93,6 +93,8 @@ class ByzantineFailureSim_test : public beast::unit_test::suite
         std::cout << "Branches: " << sim.branches() << "\n";
         std::cout << "Fully synchronized: " << std::boolalpha
                   << sim.synchronized() << "\n";
+        // Not tessting anything currently.
+        pass();
     }
 };
 
