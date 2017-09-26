@@ -56,6 +56,10 @@ LedgerOracle::accept(
 {
     Ledger::Instance next(*parent.instance_);
     next.txs.insert(txs.begin(), txs.end());
+    // Dummy-check that all consensus transactions are new
+    assert(std::none_of(txs.begin(), txs.end(), [&parent](Tx const& t) {
+        return parent.txs().find(t.id()) != parent.txs().end();
+    }));
     next.seq = parent.seq() + Ledger::Seq{1};
     next.closeTimeResolution = closeTimeResolution;
     next.closeTimeAgree = consensusCloseTime != NetClock::time_point{};

@@ -68,7 +68,7 @@ public:
             std::is_integral<OtherInt>::value &&
             sizeof(OtherInt) <= sizeof(Int)>::type>
     explicit
-        /* constexpr */
+        constexpr
         tagged_integer(OtherInt value) noexcept
         : m_value(value)
     {

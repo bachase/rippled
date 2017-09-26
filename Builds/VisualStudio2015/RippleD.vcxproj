@@ -4495,6 +4495,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='debug|x64'">True</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='release|x64'">True</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\consensus\StaticUNLSim_test.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='debug|x64'">True</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='release|x64'">True</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\consensus\Validations_test.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='debug|x64'">True</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='release|x64'">True</ExcludedFromBuild>
@@ -4576,6 +4580,8 @@
     <ClInclude Include="..\..\src\test\csf\PeerGroup.h">
     </ClInclude>
     <ClInclude Include="..\..\src\test\csf\Proposal.h">
+    </ClInclude>
+    <ClInclude Include="..\..\src\test\csf\qos.h">
     </ClInclude>
     <ClInclude Include="..\..\src\test\csf\random.h">
     </ClInclude>

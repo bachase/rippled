@@ -401,6 +401,7 @@ struct Peer
                         // ledgers
                         to->net.send(to, from, [ from, ledger = it->second ]() {
                             from->ledgers.emplace(ledger.id(), ledger);
+                            from->checkFullyValidated(ledger);
                         });
                     }
                 });
@@ -663,10 +664,12 @@ struct Peer
         std::size_t const count = validations.numTrustedForLedger(ledger.id());
         std::size_t const numTrustedPeers = trustGraph.graph().outDegree(this);
         quorum = static_cast<std::size_t>(std::ceil(numTrustedPeers * 0.8));
+
         if (count >= quorum)
         {
             issue(FullyValidateLedger{ledger, fullyValidatedLedger});
             fullyValidatedLedger = ledger;
+
         }
     }
 
@@ -830,7 +833,7 @@ struct Peer
             lastClosedLedger.parentID(),
             earliestAllowedSeq());
 
-        // Between rounds, we take the majority ledger and use the 
+        // Between rounds, we take the majority ledger and use the
         Ledger::ID const bestLCL =
             getPreferredLedger(lastClosedLedger.id(), valDistribution);
 

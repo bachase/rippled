@@ -677,16 +677,21 @@ struct StreamCollector
     void
     on(PeerID who, SimTime when, AcceptLedger const& e)
     {
-        out << when.time_since_epoch().count() << ": Node " << who << " accepted "
-            << "L" << e.ledger.id() << " " << e.ledger.txs() << "\n";
+        out << when.time_since_epoch().count() << ": Node " << who
+            << " accepted "
+            << "L" << e.ledger.id() << "S" << e.ledger.seq() << " "
+            << "W" << e.ledger.closeTime().time_since_epoch().count() << " " 
+            << e.ledger.txs() << "\n";
     }
 
     void
     on(PeerID who, SimTime when, FullyValidateLedger const& e)
     {
         out << when.time_since_epoch().count() << ": Node " << who
-            << " fully-validated " << "L"<< e.ledger.id() << " " << e.ledger.txs()
-            << "\n";
+            << " fully-validated "
+            << "L" << e.ledger.id() << "S" << e.ledger.seq() << " "
+            << "W" << e.ledger.closeTime().time_since_epoch().count() << " " 
+            << e.ledger.txs() << "\n";
     }
 };
 

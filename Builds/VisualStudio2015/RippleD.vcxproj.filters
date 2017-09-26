@@ -5253,6 +5253,9 @@
     <ClCompile Include="..\..\src\test\consensus\ScaleFreeSim_test.cpp">
       <Filter>test\consensus</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\consensus\StaticUNLSim_test.cpp">
+      <Filter>test\consensus</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\consensus\Validations_test.cpp">
       <Filter>test\consensus</Filter>
     </ClCompile>
@@ -5329,6 +5332,9 @@
       <Filter>test\csf</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\test\csf\Proposal.h">
+      <Filter>test\csf</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\test\csf\qos.h">
       <Filter>test\csf</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\test\csf\random.h">
