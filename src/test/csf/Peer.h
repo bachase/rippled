@@ -565,9 +565,7 @@ struct Peer
     Ledger::Seq
     earliestAllowedSeq() const
     {
-        if (lastClosedLedger.seq() > Ledger::Seq{20})
-            return lastClosedLedger.seq() - Ledger::Seq{20};
-        return Ledger::Seq{0};
+        return fullyValidatedLedger.seq();
     }
 
     Ledger::ID
@@ -834,10 +832,23 @@ struct Peer
             earliestAllowedSeq());
 
         // Between rounds, we take the majority ledger and use the
-        Ledger::ID const bestLCL =
-            getPreferredLedger(lastClosedLedger.id(), valDistribution);
+        Ledger::ID bestLCL =
+            getPreferredLedger(lastClosedLedger.id(), valDistribution, false /* don't prefer current on ties */);
 
-        issue(StartRound{bestLCL, lastClosedLedger});
+        Ledger startLedger = lastClosedLedger;
+
+        if (bestLCL != lastClosedLedger.id())
+        {
+            if(auto maybeLedger = acquireLedger(bestLCL))
+            {
+                // only switch if compatible
+                if(oracle.isAncestor(fullyValidatedLedger, *maybeLedger))
+                    startLedger = *maybeLedger;
+                else
+                    bestLCL = lastClosedLedger.id();
+            }
+        }
+        issue(StartRound{bestLCL, startLedger});
 
         // TODO:
         //  - Get dominant peer ledger if no validated available?
