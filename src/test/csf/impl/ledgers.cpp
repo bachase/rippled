@@ -18,7 +18,7 @@
 //==============================================================================
 #include <BeastConfig.h>
 #include <test/csf/ledgers.h>
-
+#include <functional>
 #include <sstream>
 
 namespace ripple {
@@ -38,13 +38,15 @@ Ledger::getJson() const
 
 LedgerOracle::LedgerOracle()
 {
-    instances_.insert(InstanceEntry{Ledger::genesis, nextID()});
+    instances_.insert(InstanceEntry{Ledger::genesis, Ledger::ID{0}});
 }
 
 Ledger::ID
 LedgerOracle::nextID() const
 {
-    return Ledger::ID{static_cast<Ledger::ID::value_type>(instances_.size())};
+    using type = Ledger::ID::value_type;
+    type res = std::hash<type>{}(static_cast<type>(instances_.size()));
+    return Ledger::ID{res};
 }
 
 Ledger
@@ -56,10 +58,6 @@ LedgerOracle::accept(
 {
     Ledger::Instance next(*parent.instance_);
     next.txs.insert(txs.begin(), txs.end());
-    // Dummy-check that all consensus transactions are new
-    assert(std::none_of(txs.begin(), txs.end(), [&parent](Tx const& t) {
-        return parent.txs().find(t.id()) != parent.txs().end();
-    }));
     next.seq = parent.seq() + Ledger::Seq{1};
     next.closeTimeResolution = closeTimeResolution;
     next.closeTimeAgree = consensusCloseTime != NetClock::time_point{};
