@@ -107,6 +107,7 @@ isCurrent(
 
     @param current The current ledger the node follows
     @param dist Ledger IDs and corresponding counts of support
+    @param preferCurrent On ties, prefer current ledger over the ledger with higher ID
     @return The ID of the ledger with most support, preferring to stick with
             current ledger in the case of equal support
 */
@@ -114,7 +115,8 @@ template <class LedgerID>
 inline LedgerID
 getPreferredLedger(
     LedgerID const& current,
-    hash_map<LedgerID, std::uint32_t> const& dist)
+    hash_map<LedgerID, std::uint32_t> const& dist,
+    bool const preferCurrent = true)
 {
     LedgerID netLgr = current;
     int netLgrCount = 0;
@@ -124,7 +126,7 @@ getPreferredLedger(
         // On a tie, prefer the current ledger, or the one with higher ID
         if ((it.second > netLgrCount) ||
             ((it.second == netLgrCount) &&
-             ((it.first == current) ||
+             ((preferCurrent && (it.first == current)) ||
               (it.first > netLgr && netLgr != current))))
         {
             netLgr = it.first;
