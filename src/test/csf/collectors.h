@@ -666,6 +666,7 @@ struct LedgerCollector
 struct StreamCollector
 {
     std::ostream& out;
+    bool verbose;
 
     // Ignore most events by default
     template <class E>
@@ -679,9 +680,14 @@ struct StreamCollector
     {
         out << when.time_since_epoch().count() << ": Node " << who
             << " accepted "
-            << "L" << e.ledger.id() << "S" << e.ledger.seq() << " "
-            << "W" << e.ledger.closeTime().time_since_epoch().count() << " " 
-            << e.ledger.txs() << "\n";
+            << "L" << std::hex << e.ledger.id() << std::dec << " S"
+            << e.ledger.seq() << " "
+            << "W" << e.ledger.closeTime().time_since_epoch().count();
+        if (verbose)
+        {
+            out << " " << e.ledger.txs();
+        }
+        out << "\n";
     }
 
     void
@@ -689,9 +695,14 @@ struct StreamCollector
     {
         out << when.time_since_epoch().count() << ": Node " << who
             << " fully-validated "
-            << "L" << e.ledger.id() << "S" << e.ledger.seq() << " "
-            << "W" << e.ledger.closeTime().time_since_epoch().count() << " " 
-            << e.ledger.txs() << "\n";
+            << "L" << std::hex << e.ledger.id() << std::dec << " S"
+            << e.ledger.seq() << " "
+            << "W" << e.ledger.closeTime().time_since_epoch().count();
+        if (verbose)
+        {
+            out << " " << e.ledger.txs();
+        }
+        out << "\n";
     }
 };
 
