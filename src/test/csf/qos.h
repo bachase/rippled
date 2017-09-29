@@ -189,7 +189,7 @@ struct TxProgressCollector
     };
 
     const std::size_t numPeers;
-    std::map<Tx::ID, TxTracker> txSamples;
+    hash_map<Tx::ID, TxTracker> txSamples;
 
     TxProgressCollector(const std::size_t numPeers_) : numPeers{numPeers_}
     {

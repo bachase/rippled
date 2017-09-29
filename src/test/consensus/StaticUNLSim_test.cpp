@@ -20,8 +20,8 @@
 #include <ripple/beast/clock/manual_clock.h>
 #include <ripple/beast/unit_test.h>
 #include <test/csf.h>
-#include <test/csf/random.h>
 #include <test/csf/qos.h>
+#include <test/csf/random.h>
 #include <utility>
 
 namespace ripple {
@@ -47,68 +47,78 @@ class StaticUNLSim_test : public beast::unit_test::suite
 
         // Fixed messaging delay
         for (milliseconds const delay :
-             {100ms, 200ms, 400ms, 800ms, 1600ms, 3200ms, 6400ms, 12800ms})
+             //{100ms, 200ms, 400ms, 800ms, 1600ms, 3200ms, 6400ms, 12800ms})
+             {200ms})
         {
-            Sim sim;
-            PeerGroup network = sim.createGroup(size);
-            network.trustAndConnect(network, delay);
+            for (std::uint32_t const size : {5, 10, 20, 40 ,50, 60,70,80,100})
+            {
+                Sim sim;
+                PeerGroup network = sim.createGroup(size);
+                network.trustAndConnect(network, delay);
 
-            TxProgressCollector txProgress{size};
-            ForwardProgressCollector fProgress{size};
-            StreamCollector sc{std::cout};
-            JumpCollector jumps;
-            auto coll = makeCollectors(txProgress, fProgress, jumps);  //, sc);
-            sim.collectors.add(coll);
+                TxProgressCollector txProgress{size};
+                ForwardProgressCollector fProgress{size};
+                StreamCollector sc{std::cout, false};
+                JumpCollector jumps;
+                auto coll =
+                    makeCollectors(txProgress, fProgress, jumps);  //, sc);
+                sim.collectors.add(coll);
 
-            // How long to run simulation?
-            // -- delta
+                // How long to run simulation?
+                // -- delta
 
-            std::chrono::nanoseconds warmup = 10s;
-            std::chrono::nanoseconds activeDuration = 5min;
-            std::chrono::nanoseconds cooldown = std::max<std::chrono::nanoseconds>(10 * delay, warmup);
-            std::chrono::nanoseconds simDuration =
-                warmup + activeDuration + cooldown;
-            // txs, start/stop/step, target
-            auto peerSelector = makeSelector(
-                network.begin(),
-                network.end(),
-                std::vector<double>(size, 1.),
-                sim.rng);
+                std::chrono::nanoseconds warmup = 0s;
+                std::chrono::nanoseconds activeDuration = 5min;
+                std::chrono::nanoseconds cooldown =
+                    std::max<std::chrono::nanoseconds>(10 * delay, 10s);
+                std::chrono::nanoseconds simDuration =
+                    warmup + activeDuration + cooldown;
+                // txs, start/stop/step, target
+                auto peerSelector = makeSelector(
+                    network.begin(),
+                    network.end(),
+                    std::vector<double>(size, 1.),
+                    sim.rng);
 
-            auto txSubmitter = makeSubmitter(
-                ConstantDistribution{rate.inv()},
-                sim.scheduler.now() + warmup,
-                sim.scheduler.now() + warmup + activeDuration,
-                peerSelector,
-                sim.scheduler,
-                sim.rng);
+                auto txSubmitter = makeSubmitter(
+                    ConstantDistribution{rate.inv()},
+                    sim.scheduler.now() + warmup,
+                    sim.scheduler.now() + warmup + activeDuration,
+                    peerSelector,
+                    sim.scheduler,
+                    sim.rng);
 
 // run simulation for given duration
 #if 0
-        auto stagger =
-            asDurationDist(std::uniform_int_distribution<std::int64_t>{
-                0, SimDuration{1s}.count()});
-        sim.run(simDuration, [&sim, &stagger](Peer const&) {
-            return stagger(sim.rng);
-        });
+            auto stagger =
+                asDurationDist(std::uniform_int_distribution<std::int64_t>{
+                    0, SimDuration{1s}.count()});
+            sim.run(simDuration, [&sim, &stagger](Peer const&) {
+                return stagger(sim.rng);
+            });
 #endif
-            sim.run(simDuration);
+                sim.run(simDuration);
 
-            fProgress.finalize(sim.scheduler.now());
+                fProgress.finalize(sim.scheduler.now());
 
-            // Dump samples or percentile versus delta
-            BEAST_EXPECT(jumps.closeJumps.empty());
-            BEAST_EXPECT(jumps.fullyValidatedJumps.empty());
-            BEAST_EXPECT(sim.branches() == 1);
-            BEAST_EXPECT(sim.synchronized());
+                // Dump samples or percentile versus delta
+                BEAST_EXPECT(jumps.closeJumps.empty());
+                BEAST_EXPECT(jumps.fullyValidatedJumps.empty());
+                BEAST_EXPECT(sim.branches() == 1);
+                BEAST_EXPECT(sim.synchronized());
 
-            // minimum/maximum absolute delay
+                // minimum/maximum absolute delay
 
-            std::ofstream fProgressOut{"fProgress.delay" +std::to_string(delay.count()) + ".csv"};
-            fProgress.dump(fProgressOut);
+                std::ofstream fProgressOut{
+                    "fProgress.delay" + std::to_string(delay.count()) +
+                    ".size" + std::to_string(size) + ".csv"};
+                fProgress.dump(fProgressOut);
 
-            std::ofstream txProgressOut{"txProgress.delay" +std::to_string(delay.count()) + ".csv"};
-            txProgress.dump(txProgressOut);
+                std::ofstream txProgressOut{
+                    "txProgress.delay" + std::to_string(delay.count()) +
+                    ".size" +std::to_string(size) + ".csv"};
+                txProgress.dump(txProgressOut);
+            }
         }
         // bandwidth/messages vs network Size and delay
         // Smeared initial state?
