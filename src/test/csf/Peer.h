@@ -850,6 +850,9 @@ struct Peer
         }
         issue(StartRound{bestLCL, startLedger});
 
+		// TODO: Expire validations less frequently?
+        validations.expire();
+
         // TODO:
         //  - Get dominant peer ledger if no validated available?
         //  - Check that we are switching to something compatible with our
@@ -863,8 +866,6 @@ struct Peer
     void
     start()
     {
-        // TODO: Expire validations less frequently?
-        validations.expire();
         scheduler.in(parms().ledgerGRANULARITY, [&]() { timerEntry(); });
         startRound();
     }
