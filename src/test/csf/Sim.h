@@ -67,6 +67,7 @@ class Sim
     std::deque<Peer> peers;
 
 public:
+	std::random_device rd;
     std::mt19937_64 rng;
     Scheduler scheduler;
     BasicSink sink;
@@ -82,7 +83,7 @@ public:
         and no network connections.
 
     */
-    Sim() : sink{scheduler.clock()}, j{sink}, net{scheduler}
+    Sim() : rng{rd()}, sink{scheduler.clock()}, j{sink}, net{scheduler}
     {
     }
 
@@ -123,7 +124,7 @@ public:
         return peers.size();
     }
 
-    /** Run consensus protocol to generate the provided number of ledgers.
+	/** Run consensus protocol to generate the provided number of ledgers.
 
         Has each peer run consensus until it closes `ledgers` more ledgers.
 
@@ -132,7 +133,14 @@ public:
     void
     run(int ledgers);
 
-    /** Run consensus for the given duration */
+    /** Run consensus for the given duration
+
+		Run the simulation for the specified duration. Peers will continuously
+		run consensus during this interval unless the simulation code explicitly
+		changes their behavior elsewhere.
+
+		@param dur The duration to run consensus process foor.
+	*/
     void
     run(SimDuration const& dur);
 
