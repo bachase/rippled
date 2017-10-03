@@ -354,8 +354,9 @@ struct Peer
         @return Whether the connection was created.
     */
 
+	template <class Delay>
     bool
-    connect(Peer & o, SimDuration dur)
+    connect(Peer & o, Delay && dur)
     {
         return net.connect(this, &o, dur);
     }

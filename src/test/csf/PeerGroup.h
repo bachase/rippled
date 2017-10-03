@@ -153,8 +153,9 @@ public:
 
 
     */
+	template <class NextDelay>
     void
-    connect(PeerGroup const& o, SimDuration delay)
+    connect(PeerGroup const& o, NextDelay && delay)
     {
         for(Peer * p : peers_)
         {
@@ -193,8 +194,9 @@ public:
         @param o The group of peers to trust and connect to
         @param delay The fixed messaging delay for all established connections
     */
+	template <class Delay>
     void
-    trustAndConnect(PeerGroup const & o, SimDuration delay)
+    trustAndConnect(PeerGroup const & o, Delay && delay)
     {
         trust(o);
         connect(o, delay);
@@ -209,8 +211,9 @@ public:
         @param delay The fixed messaging delay for all established connections
 
     */
+	template <class Delay>
     void
-    connectFromTrust(SimDuration delay)
+    connectFromTrust(Delay && delay)
     {
         for (Peer * peer : peers_)
         {
