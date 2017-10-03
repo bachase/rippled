@@ -90,102 +90,186 @@ class BasicNetwork
 
     using time_point = typename clock_type::time_point;
 
+    // Generate the next random delay for a link
+    class delay_gen
+    {
+        struct impl
+        {
+            virtual duration
+            operator()() = 0;
+            virtual ~impl() = default;
+        };
+
+        template <class T>
+        struct any : impl
+        {
+            template <class Deduced>
+            any(Deduced&& t) : t_{std::forward<Deduced>(t)}
+            {
+            }
+
+            duration
+            operator()() override
+            {
+                return t_();
+            }
+
+            T t_;
+        };
+
+		struct constant : impl
+		{
+			duration d_;
+
+			constant(duration d) : d_{d} {}
+
+			duration
+			operator()() override
+			{
+				return d_;
+			}
+		};
+
+        std::shared_ptr<impl> impl_;
+
+    public:
+		delay_gen(delay_gen const& c) = default;
+        delay_gen&
+        operator=(delay_gen& c) = default;
+
+		delay_gen(delay_gen&&) = default;
+        delay_gen&
+        operator=(delay_gen&&) = default;
+
+        delay_gen() : impl_{std::make_shared<constant>(duration{0})}
+        {
+        }
+
+		delay_gen(duration d) : impl_{std::make_shared<constant>(d)}
+		{
+		}
+
+		template <class T>
+        delay_gen(
+            T&& t,
+            std::enable_if_t<
+                !std::is_convertible<std::decay_t<T>, duration>::value &&
+                    !std::is_same<std::decay_t<T>, delay_gen>::value, void *> ig = nullptr)
+            : impl_{std::make_shared<any<T>>(std::forward<T>(t))}
+        {
+        }
+
+		duration operator()()
+		{
+			return (*impl_)();
+		}
+
+};
+
     struct link_type
     {
         bool inbound = false;
-        duration delay{};
+		delay_gen nextDelay{};
         time_point established{};
-        link_type() = default;
-        link_type(bool inbound_, duration delay_, time_point established_)
-            : inbound(inbound_), delay(delay_), established(established_)
+        time_point nextDelivery{};
+
+		link_type() : nextDelay(duration{0})
+        {
+        }
+
+		template <class NextDelay>
+        link_type(bool inbound_, NextDelay && delay_, time_point established_)
+            : inbound(inbound_)
+            , nextDelay(std::forward<NextDelay>(delay_))
+            , established(established_)
         {
         }
     };
 
     Scheduler& scheduler;
-    Digraph<Peer, link_type> links_;
+        Digraph<Peer, link_type> links_;
 
-public:
-    BasicNetwork(BasicNetwork const&) = delete;
-    BasicNetwork&
-    operator=(BasicNetwork const&) = delete;
+    public:
+        BasicNetwork(BasicNetwork const&) = delete;
+        BasicNetwork&
+        operator=(BasicNetwork const&) = delete;
 
-    BasicNetwork(Scheduler& s);
+        BasicNetwork(Scheduler& s);
 
-    /** Connect two peers.
+        /** Connect two peers.
 
-        The link is directed, with `from` establishing
-        the outbound connection and `to` receiving the
-        incoming connection.
+            The link is directed, with `from` establishing
+            the outbound connection and `to` receiving the
+            incoming connection.
 
-        Preconditions:
+            Preconditions:
 
-            from != to (self connect disallowed).
+                from != to (self connect disallowed).
 
-            A link between from and to does not
-            already exist (duplicates disallowed).
+                A link between from and to does not
+                already exist (duplicates disallowed).
 
-        Effects:
+            Effects:
 
-            Creates a link between from and to.
+                Creates a link between from and to.
 
-        @param `from` The source of the outgoing connection
-        @param `to` The recipient of the incoming connection
-        @param `delay` The time delay of all delivered messages
-        @return `true` if a new connection was established
-    */
-    bool
-    connect(
-        Peer const& from,
-        Peer const& to,
-        duration const& delay = std::chrono::seconds{0});
+            @param `from` The source of the outgoing connection
+            @param `to` The recipient of the incoming connection
+            @param `delay` The time delay of all delivered messages
+            @return `true` if a new connection was established
+        */
+		template <class NextDelay>
+		bool
+        connect(
+            Peer const& from,
+            Peer const& to,
+            NextDelay && nextDelay);
 
-    /** Break a link.
+        /** Break a link.
 
-        Effects:
+            Effects:
 
-            If a connection is present, both ends are
-            disconnected.
+                If a connection is present, both ends are
+                disconnected.
 
-            Any pending messages on the connection
-            are discarded.
+                Any pending messages on the connection
+                are discarded.
 
-        @return `true` if a connection was broken.
-    */
-    bool
-    disconnect(Peer const& peer1, Peer const& peer2);
+            @return `true` if a connection was broken.
+        */
+        bool
+        disconnect(Peer const& peer1, Peer const& peer2);
 
-    /** Send a message to a peer.
+        /** Send a message to a peer.
 
-        Preconditions:
+            Preconditions:
 
-            A link exists between from and to.
+                A link exists between from and to.
 
-        Effects:
+            Effects:
 
-            If the link is not broken when the
-            link's `delay` time has elapsed,
-            the function will be invoked with
-            no arguments.
+                If the link is not broken when the
+                link's `delay` time has elapsed,
+                the function will be invoked with
+                no arguments.
 
-        @note Its the caller's responsibility to
-        ensure that the body of the function performs
-        activity consistent with `from`'s receipt of
-        a message from `to`.
-    */
-    template <class Function>
-    void
-    send(Peer const& from, Peer const& to, Function&& f);
+            @note Its the caller's responsibility to
+            ensure that the body of the function performs
+            activity consistent with `from`'s receipt of
+            a message from `to`.
+        */
+        template <class Function>
+        void
+        send(Peer const& from, Peer const& to, Function&& f);
 
+        /** Return the range of active links.
 
-    /** Return the range of active links.
-
-        @return A random access range over Digraph::Edge instances
-    */
-    auto
-    links(Peer const& from)
-    {
-        return links_.outEdges(from);
+            @return A random access range over Digraph::Edge instances
+        */
+        auto
+        links(Peer const& from)
+        {
+            return links_.outEdges(from);
     }
 
     /** Return the underlying digraph
@@ -203,11 +287,12 @@ BasicNetwork<Peer>::BasicNetwork(Scheduler& s) : scheduler(s)
 }
 
 template <class Peer>
+template <class NextDelay>
 inline bool
 BasicNetwork<Peer>::connect(
     Peer const& from,
     Peer const& to,
-    duration const& delay)
+    NextDelay && delay)
 {
     if (to == from)
         return false;
@@ -237,16 +322,20 @@ template <class Function>
 inline void
 BasicNetwork<Peer>::send(Peer const& from, Peer const& to, Function&& f)
 {
-    auto link = links_.edge(from,to);
+	using namespace std::chrono_literals;
+    link_type * link = links_.edge(from,to);
     if(!link)
         return;
     time_point const sent = scheduler.now();
-    scheduler.in(
-        link->delay,
+    time_point const delivery = std::max<time_point>(
+        link->nextDelivery + 1ns, sent + link->nextDelay());
+    link->nextDelivery = delivery;
+    scheduler.at(
+        delivery,
         [ from, to, sent, f = std::forward<Function>(f), this ] {
             // only process if still connected and connection was
             // not broken since the message was sent
-            auto link = links_.edge(from, to);
+            link_type * link = links_.edge(from, to);
             if (link && link->established <= sent)
                 f();
         });

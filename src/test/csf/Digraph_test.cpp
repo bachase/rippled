@@ -90,6 +90,8 @@ public:
         "}\n";
         BEAST_EXPECT(ss.str() == expectedDot);
 
+		*graph.edge('a','b') = "replace";
+		BEAST_EXPECT(*graph.edge('a','b') == "replace");
 
     }
 };

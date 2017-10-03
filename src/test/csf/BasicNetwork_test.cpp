@@ -87,10 +87,10 @@ public:
         pv.emplace_back(2);
         csf::Scheduler scheduler;
         csf::BasicNetwork<Peer*> net(scheduler);
-        BEAST_EXPECT(!net.connect(&pv[0], &pv[0]));
+        BEAST_EXPECT(!net.connect(&pv[0], &pv[0], 0s));
         BEAST_EXPECT(net.connect(&pv[0], &pv[1], 1s));
         BEAST_EXPECT(net.connect(&pv[1], &pv[2], 1s));
-        BEAST_EXPECT(!net.connect(&pv[0], &pv[1]));
+        BEAST_EXPECT(!net.connect(&pv[0], &pv[1], 0s));
         for (auto& peer : pv)
             peer.start(scheduler, net);
         BEAST_EXPECT(scheduler.step_for(0s));
@@ -128,7 +128,7 @@ public:
         net.send(0, 2, [&]() { delivered.insert(2); });
 
         scheduler.in(1000ms, [&]() { BEAST_EXPECT(net.disconnect(0, 2)); });
-        scheduler.in(1100ms, [&]() { BEAST_EXPECT(net.connect(0, 2)); });
+        scheduler.in(1100ms, [&]() { BEAST_EXPECT(net.connect(0, 2, 0s)); });
 
         scheduler.step();
 
@@ -138,11 +138,51 @@ public:
     }
 
     void
+    testNonConstantDelay()
+    {
+        using namespace std::chrono_literals;
+        csf::Scheduler scheduler;
+        csf::BasicNetwork<int> net(scheduler);
+
+		using tp = csf::Scheduler::time_point;
+
+		int counter = 0;
+		BEAST_EXPECT(net.connect(0, 1, [&counter]()
+		{
+			++counter;
+			switch (counter)
+			{
+			case 1:
+				return 1s;
+			case 2:
+				return 8s;
+			case 3:
+				return 2s;
+			default:
+				return -1s;
+			}
+		}));
+
+
+        std::set<tp> delivered;
+        net.send(0, 1, [&]() { delivered.insert(scheduler.now()); });
+        net.send(0, 1, [&]() { delivered.insert(scheduler.now()); });
+		net.send(0, 1, [&]() { delivered.insert(scheduler.now()); });
+		net.send(0, 1, [&]() { delivered.insert(scheduler.now()); });
+
+        scheduler.step();
+
+		std::set<tp> expected{tp{1s}, tp{8s}, tp{8s + 1ns}, tp{8s + 2ns}};
+		BEAST_EXPECT(delivered == expected);
+
+    }
+
+    void
     run() override
     {
         testNetwork();
         testDisconnect();
-
+		testNonConstantDelay();
     }
 };
 

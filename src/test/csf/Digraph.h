@@ -107,14 +107,17 @@ public:
         return false;
     }
 
-    /** Return edge data between two vertices
+	/** Return edge data between two vertices
 
         @param source The source vertex
         @param target The target vertex
-        @return optional<Edge> which is boost::none if no edge exists
+        @return Pointer to EdgeData if edge exists, otherwise nullptr.
+
+		@note The pointer may be invalidated if subsequent calls to connect
+		      or disconnect are made on the graph.
 
     */
-    boost::optional<EdgeData>
+    EdgeData const *
     edge(Vertex source, Vertex target) const
     {
         auto it = graph_.find(source);
@@ -122,9 +125,32 @@ public:
         {
             auto edgeIt = it->second.find(target);
             if (edgeIt != it->second.end())
-                return edgeIt->second;
+                return &edgeIt->second;
         }
-        return boost::none;
+        return nullptr;
+    }
+
+    /** Return edge data between two vertices
+
+        @param source The source vertex
+        @param target The target vertex
+        @return Pointer to EdgeData if edge exists, otherwise nullptr.
+
+		@note The pointer may be invalidated if subsequent calls to connect
+		      or disconnect are made on the graph.
+
+    */
+    EdgeData *
+    edge(Vertex source, Vertex target)
+    {
+		auto it = graph_.find(source);
+        if (it != graph_.end())
+        {
+            auto edgeIt = it->second.find(target);
+            if (edgeIt != it->second.end())
+                return &edgeIt->second;
+        }
+        return nullptr;
     }
 
     /** Check if two vertices are connected
@@ -136,7 +162,7 @@ public:
     bool
     connected(Vertex source, Vertex target) const
     {
-        return edge(source, target) != boost::none;
+        return edge(source, target) != nullptr;
     }
 
     /** Range over vertices in the graph
