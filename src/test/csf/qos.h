@@ -31,10 +31,26 @@ namespace ripple {
 namespace test {
 namespace csf {
 
-// Tracks the number of fully validated branches
+/** Collector for branch metric
+
+	Stores the number of fully validated branches and the number of
+	active "working" branches over time.
+*/
 struct BranchCollector
 {
 
+	struct Sample
+	{
+		PeerID peer;
+		Ledger::ID id;
+		Ledger::Seq seq;
+	};
+
+	std::deque<Sample> fullValidations;
+	std::deque<Sample> acceptLedgers;
+
+	// For each peer[t] = ledger_id
+	// Given a set of ledger_ids, how many branches
     // Ignore most events by default
     template <class E>
     void
@@ -42,11 +58,38 @@ struct BranchCollector
     {
     }
 
+	void
+    on(PeerID who, SimTime when, AcceptLedger const& e)
+    {
+        acceptLedgers.emplace_back(Sample{who, e.ledger.id(), e.ledger.seq()});
+    }
+
     void
     on(PeerID who, SimTime when, FullyValidateLedger const& e)
     {
-
+        fullValidations.emplace_back(
+            Sample{who, e.ledger.id(), e.ledger.seq()});
     }
+
+	void
+    dumpAccept(std::ostream & os)
+	{
+		os << "Peer,LedgerID,LedgerSeq\n";
+		for(auto const & s : acceptLedgers)
+		{
+			os << s.peer << "," << s.id << "," << s.seq << "\n";
+		}
+	}
+
+	void
+    dumpValidations(std::ostream & os)
+	{
+		os << "Peer,LedgerID,LedgerSeq\n";
+		for(auto const & s : fullValidations)
+		{
+			os << s.peer << "," << s.id << "," << s.seq << "\n";
+		}
+	}
 };
 
 /** Collector for forward progress metric
