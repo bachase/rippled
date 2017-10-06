@@ -19,13 +19,14 @@
 #ifndef RIPPLE_TEST_CSF_QOS_H_INCLUDED
 #define RIPPLE_TEST_CSF_QOS_H_INCLUDED
 
-#include <test/csf/collectors.h>
 #include <test/csf/SimTime.h>
+#include <test/csf/collectors.h>
 #include <test/csf/events.h>
+#include <test/csf/DataFrame.h>
 
+#include <boost/function_output_iterator.hpp>
 #include <limits>
 #include <map>
-#include <boost/function_output_iterator.hpp>
 
 namespace ripple {
 namespace test {
@@ -33,24 +34,24 @@ namespace csf {
 
 /** Collector for branch metric
 
-	Stores the number of fully validated branches and the number of
-	active "working" branches over time.
+        Stores the number of fully validated branches and the number of
+        active "working" branches over time.
 */
 struct BranchCollector
 {
+    using Samples = DataFrame<PeerID, Ledger::ID, Ledger::Seq>;
 
-	struct Sample
-	{
-		PeerID peer;
-		Ledger::ID id;
-		Ledger::Seq seq;
-	};
+    Samples fullValidations;
+    Samples acceptLedgers;
 
-	std::deque<Sample> fullValidations;
-	std::deque<Sample> acceptLedgers;
+    BranchCollector()
+        : fullValidations{"Peer", "LedgerID", "LedgerSeq"}
+        , acceptLedgers{"Peer", "LedgerID", "LedgerSeq"}
+    {
+    }
 
-	// For each peer[t] = ledger_id
-	// Given a set of ledger_ids, how many branches
+    // For each peer[t] = ledger_id
+    // Given a set of ledger_ids, how many branches
     // Ignore most events by default
     template <class E>
     void
@@ -58,38 +59,17 @@ struct BranchCollector
     {
     }
 
-	void
+    void
     on(PeerID who, SimTime when, AcceptLedger const& e)
     {
-        acceptLedgers.emplace_back(Sample{who, e.ledger.id(), e.ledger.seq()});
+        acceptLedgers.push_back(who, e.ledger.id(), e.ledger.seq());
     }
 
     void
     on(PeerID who, SimTime when, FullyValidateLedger const& e)
     {
-        fullValidations.emplace_back(
-            Sample{who, e.ledger.id(), e.ledger.seq()});
+        fullValidations.push_back(who, e.ledger.id(), e.ledger.seq());
     }
-
-	void
-    dumpAccept(std::ostream & os)
-	{
-		os << "Peer,LedgerID,LedgerSeq\n";
-		for(auto const & s : acceptLedgers)
-		{
-			os << s.peer << "," << s.id << "," << s.seq << "\n";
-		}
-	}
-
-	void
-    dumpValidations(std::ostream & os)
-	{
-		os << "Peer,LedgerID,LedgerSeq\n";
-		for(auto const & s : fullValidations)
-		{
-			os << s.peer << "," << s.id << "," << s.seq << "\n";
-		}
-	}
 };
 
 /** Collector for forward progress metric
@@ -101,7 +81,6 @@ struct BranchCollector
 */
 struct ForwardProgressCollector
 {
-
     struct PeerTracker
     {
         struct Sample
@@ -120,16 +99,14 @@ struct ForwardProgressCollector
         SimDuration maxDelay{};
         bool init = false;
 
-
         void
         addSample(SimTime when, Ledger::ID ledgerID)
         {
             if (init)
             {
-                SimDuration delay = std::min(when-lastTime, infDelay);
-                samples.emplace_back(Sample{delay,ledgerID});
+                SimDuration delay = std::min(when - lastTime, infDelay);
+                samples.emplace_back(Sample{delay, ledgerID});
                 maxDelay = std::max(delay, maxDelay);
-
             }
             else
                 init = true;
@@ -141,11 +118,10 @@ struct ForwardProgressCollector
         void
         finalize(SimTime when)
         {
-            if (!init || ((when- lastTime) > 2 * maxDelay))
+            if (!init || ((when - lastTime) > 2 * maxDelay))
                 samples.emplace_back(Sample{infDelay, infLedger});
         }
     };
-
 
     hash_map<PeerID, PeerTracker> peerSamples;
 
@@ -183,20 +159,25 @@ struct ForwardProgressCollector
             it.second.finalize(now);
     }
 
-    void
-    dump(std::ostream& os)
+    using Samples = DataFrame<PeerID, Ledger::ID, std::chrono::milliseconds>;
+    Samples
+    toDataFrame()
     {
         using namespace std::chrono;
 
-        os << "Peer,Ledger,Delay\n";
+        Samples s{"Peer", "LedgerID", "Delay"};
         for (auto const& it : peerSamples)
         {
             for (auto const& sample : it.second.samples)
             {
-                os << it.first << "," << sample.ledger << ","
-                   << duration_cast<milliseconds>(sample.delay).count() << "\n";
+                s.push_back(
+                    it.first,
+                    sample.ledger,
+                    duration_cast<milliseconds>(sample.delay));
+                ;
             }
         }
+        return s;
     }
 };
 
@@ -259,8 +240,8 @@ struct TxProgressCollector
 
         auto addTx = [&](Tx const& tx) {
             auto it = txSamples.find(tx.id());
-            assert(it != txSamples.end());
-            it->second.addSample(when, who);
+            if(it != txSamples.end())
+                it->second.addSample(when, who);
         };
 
         std::set_difference(
@@ -271,26 +252,27 @@ struct TxProgressCollector
             boost::make_function_output_iterator(std::ref(addTx)));
     }
 
-    void
-    dump(std::ostream & os)
+    using Samples = DataFrame<Tx::ID, PeerID, std::chrono::milliseconds>;
+    Samples
+    toDataFrame()
     {
         using namespace std::chrono;
 
-        os << "TxID,Peer,Delay\n";
-        for (auto const & it : txSamples)
+        Samples s{"TxID", "Peer","Delay"};
+        for (auto const& it : txSamples)
         {
-            auto const & peerSamples = it.second.samples;
+            auto const& peerSamples = it.second.samples;
             for (auto peerID = 0; peerID < peerSamples.size(); ++peerID)
             {
-                os << it.first << "," << peerID << ","
-                   << duration_cast<milliseconds>(peerSamples[peerID]).count()
-                   << "\n";
+                s.push_back(
+                    it.first,
+                    PeerID{peerID},
+                    duration_cast<milliseconds>(peerSamples[peerID]));
             }
         }
+        return s;
     }
 };
-
-
 
 }  // namespace csf
 }  // namespace test

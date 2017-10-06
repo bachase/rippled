@@ -1,4 +1,4 @@
-//------------------------------------------------------------------------------
+//-------------------------------x-----------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
     Copyright (c) 2012-2016 Ripple Labs Inc->
@@ -29,6 +29,131 @@ namespace test {
 
 namespace csf {
 
+inline
+std::ostream & operator<<(std::ostream & os, std::chrono::milliseconds const & ms)
+{
+    return os << ms.count();
+}
+namespace detail {
+
+void
+vectorPrint(std::ostream& out, std::vector<std::string> const& vs)
+{
+    bool doComma = false;
+    for (auto const& s : vs)
+    {
+        if (doComma)
+            out << ",";
+        out << s;
+        doComma = true;
+    }
+}
+
+template <typename Type, unsigned N, unsigned Last>
+struct tuple_printer
+{
+    static void
+    print(std::ostream& out, const Type& ts)
+    {
+        out << std::get<N>(ts) << ", ";
+        tuple_printer<Type, N + 1, Last>::print(out, ts);
+    }
+};
+
+template <typename Type, unsigned N>
+struct tuple_printer<Type, N, N>
+{
+    static void
+    print(std::ostream& out, const Type& ts)
+    {
+        out << std::get<N>(ts);
+    }
+};
+
+template <class... Ts>
+void
+tuplePrint(std::ostream& out, std::tuple<Ts...> const& ts)
+{
+    tuple_printer<std::tuple<Ts...>, 0, sizeof...(Ts) - 1>::print(out, ts);
+}
+}  // namespace detail
+
+
+template <class T>
+struct Parm
+{
+    std::string const name;
+    T const t;
+};
+
+template<class T>
+Parm<T>
+parm(std::string const & n, T const & t)
+{
+    return Parm<T>{n, t};
+}
+
+template <class... Ts>
+struct Parms
+{
+    std::vector<std::string> names;
+    std::tuple<Ts...> parms;
+
+    Parms(Parm<Ts>... ps) : names{ps.name...}, parms{ps.t...} {}
+
+    friend
+    inline
+    std::ostream& operator<<(std::ostream& out, Parms const & p)
+    {
+        detail::vectorPrint(out, p.names);
+        out << ",";
+        detail::tuplePrint(out, p.parms);
+        return out;
+    }
+};
+
+template <class... Ts>
+Parms<Ts...>
+parms(Parm<Ts> ...ps)
+{
+    return Parms<Ts...>(ps...);
+}
+
+class StreamingWriter
+{
+    std::ofstream out;
+    bool printHeader = true;
+
+public:
+    StreamingWriter(std::string const & s) : out{s}
+    {
+    }
+
+
+    template <class ... Ps, class ... Ts>
+    void
+    write(Parms<Ps...> const & parms, DataFrame<Ts...> const & df)
+    {
+        if(printHeader)
+        {
+            detail::vectorPrint(out, parms.names);
+            out << ",";
+            detail::vectorPrint(out, df.names);
+            out << "\n";
+
+        }
+        printHeader = false;
+
+        for(auto const & row : df.data)
+        {
+            detail::tuplePrint(out, parms.parms);
+            out << ",";
+            detail::tuplePrint(out, row);
+            out << "\n";
+        }
+    }
+};
+
 // Study a
 class StaticUNLSim_test : public beast::unit_test::suite
 {
@@ -38,98 +163,123 @@ class StaticUNLSim_test : public beast::unit_test::suite
         using namespace std::chrono;
         using namespace csf;
 
-        // Parameters
+        // Constant Parameters
+        std::chrono::nanoseconds const activeDuration = 3min;
 
-        // Number of Peers
-        std::uint32_t const size = 5;
         // Tx submission rate
         Rate const rate{10, 1000ms};
 
-        // Fixed messaging delay
+        // Output files
+        StreamingWriter fProgressOut("forwardProgress.csv");
+        StreamingWriter txProgressOut("txProgress.csv");
+        StreamingWriter acceptLedgersOut("acceptLedgers.csv");
+        StreamingWriter fullValidationsOut("fullValidations.csv");
+
+        // Number of trials for random stagger start
         for (std::uint32_t trial = 0; trial < 50; ++trial)
         {
+            // Fixed messaging delay
             for (milliseconds const delay :
-                 //{100ms, 200ms, 400ms, 800ms, 1600ms, 3200ms, 6400ms,
-                 //12800ms})
-                 {200ms})
+                 {100ms, 200ms, 400ms, 800ms, 1600ms, 3200ms, 6400ms, 12800ms})
+            //{3200ms})
             {
-                for (std::uint32_t const size :
-                     {5})  //, 10, 20, 40 ,50, 60,70,80,100})
+                // Network size
+                for (std::uint32_t const size : {5, 10, 15, 20})
+                //{5})
                 {
-                    Sim sim;
-                    PeerGroup network = sim.createGroup(size);
-                    network.trustAndConnect(network, delay);
-
-                    TxProgressCollector txProgress{size};
-                    ForwardProgressCollector fProgress{size};
-                    StreamCollector sc{std::cout, false};
-                    JumpCollector jumps;
-                    auto coll =
-                        makeCollectors(txProgress, fProgress, jumps);  //, sc);
-                    sim.collectors.add(coll);
-
-                    // How long to run simulation?
-                    // -- delta
-
-                    std::chrono::nanoseconds warmup = 0s;
-                    std::chrono::nanoseconds activeDuration = 5min;
-                    std::chrono::nanoseconds cooldown =
-                        std::max<std::chrono::nanoseconds>(10 * delay, 10s);
-                    std::chrono::nanoseconds simDuration =
-                        warmup + activeDuration + cooldown;
-                    // txs, start/stop/step, target
-                    auto peerSelector = makeSelector(
-                        network.begin(),
-                        network.end(),
-                        std::vector<double>(size, 1.),
-                        sim.rng);
-
-                    auto txSubmitter = makeSubmitter(
-                        ConstantDistribution{rate.inv()},
-                        sim.scheduler.now() + warmup,
-                        sim.scheduler.now() + warmup + activeDuration,
-                        peerSelector,
-                        sim.scheduler,
-                        sim.rng);
-
-// run simulation for given duration
-#if 0
-            auto stagger =
-                asDurationDist(std::uniform_int_distribution<std::int64_t>{
-                    0, SimDuration{1s}.count()});
-            sim.run(simDuration, [&sim, &stagger](Peer const&) {
-                return stagger(sim.rng);
-            });
-#endif
-                    std::uniform_int_distribution<std::int64_t> randMS{0, 1000};
-
-                    for (Peer* p : network)
+                    // Warmup phase when connection still fast
+                    for (milliseconds const warmupPhase : {0s, 30s})
                     {
-                        sim.scheduler.in(milliseconds{randMS(sim.rng)}, [p]() {
-                            p->start();
-                        });
+                        Sim sim;
+                        PeerGroup network = sim.createGroup(size);
+
+                        std::chrono::nanoseconds const txWarmup = 0s;
+
+                        std::chrono::nanoseconds const cooldown =
+                            std::max<std::chrono::nanoseconds>(10 * delay, 10s);
+                        std::chrono::nanoseconds const simDuration =
+                            txWarmup + activeDuration + cooldown;
+                        // Delayed start to let net
+                        auto const fastUntil =
+                            sim.scheduler.now() + warmupPhase;
+                        // Use a fast time during the warmup phase
+                        network.trustAndConnect(
+                            network, [&sim, delay, fastUntil]() {
+                                if (sim.scheduler.now() < fastUntil)
+                                    return 200ms;
+                                else
+                                    return delay;
+                            });
+
+                        TxProgressCollector txProgress{size};
+                        ForwardProgressCollector fProgress{size};
+                        BranchCollector branchCollector;
+                        StreamCollector sc{std::cout, false};
+                        JumpCollector jumps;
+                        auto coll = makeCollectors(
+                            txProgress,
+                            fProgress,
+                            jumps,
+                            branchCollector);  //, sc);
+                        auto windowed = makeStartAfter(
+                            sim.scheduler.now() + warmupPhase, coll);
+                        sim.collectors.add(windowed);
+
+                        // txs, start/stop/step, target
+                        auto peerSelector = makeSelector(
+                            network.begin(),
+                            network.end(),
+                            std::vector<double>(size, 1.),
+                            sim.rng);
+
+                        auto txSubmitter = makeSubmitter(
+                            ConstantDistribution{rate.inv()},
+                            sim.scheduler.now() + txWarmup,
+                            sim.scheduler.now() + txWarmup + activeDuration,
+                            peerSelector,
+                            sim.scheduler,
+                            sim.rng);
+
+                        // run simulation for given duration
+
+                        // stagger the initial start times
+                        std::uniform_int_distribution<std::int64_t> randMS{
+                            0, 1000};
+
+                        for (Peer* p : network)
+                        {
+                            sim.scheduler.in(
+                                milliseconds{randMS(sim.rng)},
+                                [p]() { p->start(); });
+                        }
+                        sim.scheduler.step_for(simDuration);
+
+                        fProgress.finalize(sim.scheduler.now());
+
+                        BEAST_EXPECT(jumps.closeJumps.empty());
+                        BEAST_EXPECT(jumps.fullyValidatedJumps.empty());
+                        BEAST_EXPECT(sim.branches() == 1);
+                        BEAST_EXPECT(sim.synchronized());
+
+                        {
+                            auto parameters = parms(
+                                parm("Trial", trial),
+                                parm("Delay", delay),
+                                parm("Peers", size),
+                                parm("Warmup", warmupPhase));
+
+                            std::cout << parameters << std::endl;
+
+                            fProgressOut.write(
+                                parameters, fProgress.toDataFrame());
+                            txProgressOut.write(
+                                parameters, txProgress.toDataFrame());
+                            acceptLedgersOut.write(
+                                parameters, branchCollector.acceptLedgers);
+                            fullValidationsOut.write(
+                                parameters, branchCollector.fullValidations);
+                        }
                     }
-                    sim.scheduler.step_for(simDuration);
-
-                    fProgress.finalize(sim.scheduler.now());
-
-                    // Dump samples or percentile versus delta
-                    BEAST_EXPECT(jumps.closeJumps.empty());
-                    BEAST_EXPECT(jumps.fullyValidatedJumps.empty());
-                    BEAST_EXPECT(sim.branches() == 1);
-                    BEAST_EXPECT(sim.synchronized());
-
-                    // minimum/maximum absolute delay
-
-                    std::ofstream fProgressOut{
-                        "fProgress.delay" + std::to_string(delay.count()) +
-                        ".size" + std::to_string(size) + "trial." + std::to_string(trial) + ".csv"};
-                    fProgress.dump(fProgressOut);
-
-                    std::ofstream txProgressOut{
-                        "txProgress.delay" + std::to_string(delay.count()) +
-                        ".size" + std::to_string(size) + "trial." + std::to_string(trial) + ".csv"};
-                    txProgress.dump(txProgressOut);
                 }
             }
         }

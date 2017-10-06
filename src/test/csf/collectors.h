@@ -134,6 +134,33 @@ struct CollectByNode
 
 };
 
+template <class C>
+struct StartAfterCollector
+{
+    SimTime start_;
+    C& c_;
+
+    StartAfterCollector(SimTime start, C& c)
+        : start_{start}, c_{c}
+    {
+
+    }
+
+    template <class E>
+    void
+    on(PeerID who, SimTime when, E const& e)
+    {
+        if (start_ <= when)
+            c_.on(who, when, e);
+    }
+};
+
+template <class C>
+StartAfterCollector<C> makeStartAfter(SimTime s, C & c)
+{
+	return StartAfterCollector<C>{s, c};
+}
+
 /** Collector which ignores all events */
 struct NullCollector
 {
