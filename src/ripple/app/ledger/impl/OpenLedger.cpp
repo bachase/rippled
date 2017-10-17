@@ -45,33 +45,41 @@ OpenLedger::OpenLedger(std::shared_ptr<
 bool
 OpenLedger::empty() const
 {
+    auto trace = perf::makeTrace("modifylock", 1);
     std::lock_guard<
         std::mutex> lock(modify_mutex_);
+    perf::add(trace, "locked");
     return current_->txCount() == 0;
 }
 
 std::shared_ptr<OpenView const>
 OpenLedger::current() const
 {
+    auto trace = perf::makeTrace("currentlock", 1);
     std::lock_guard<
         std::mutex> lock(
             current_mutex_);
+    perf::add(trace, "locked");
     return current_;
 }
 
 bool
 OpenLedger::modify (modify_type const& f)
 {
+    auto trace1 = perf::makeTrace("modifylock", 2);
     std::lock_guard<
         std::mutex> lock1(modify_mutex_);
+    perf::add(trace1, "locked");
     auto next = std::make_shared<
         OpenView>(*current_);
     auto const changed = f(*next, j_);
     if (changed)
     {
+        auto trace2 = perf::makeTrace("currentlock", 2);
         std::lock_guard<
             std::mutex> lock2(
                 current_mutex_);
+        perf::add(trace2, "locked");
         current_ = std::move(next);
     }
     return changed;
@@ -106,8 +114,10 @@ OpenLedger::accept(Application& app, Rules const& rules,
     // Block calls to modify, otherwise
     // new tx going into the open ledger
     // would get lost.
+    auto trace1 = perf::makeTrace("modifylock", 3);
     std::lock_guard<
         std::mutex> lock1(modify_mutex_);
+    perf::add(trace1, "locked");
     // Apply tx from the current open view
     if (! current_->txs.empty())
     {
@@ -160,13 +170,15 @@ OpenLedger::accept(Application& app, Rules const& rules,
                 app.timeKeeper().now().time_since_epoch().count());
             app.overlay().foreach(send_if_not(
                 std::make_shared<Message>(msg, protocol::mtTRANSACTION),
-                peer_in_set(*toSkip)));
+                peer_in_set(*toSkip), txId));
         }
     }
 
     // Switch to the new open view
+    auto trace2 = perf::makeTrace("currentlock", 3);
     std::lock_guard<
         std::mutex> lock2(current_mutex_);
+    perf::add(trace2, "locked");
     current_ = std::move(next);
 }
 

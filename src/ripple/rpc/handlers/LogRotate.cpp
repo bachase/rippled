@@ -24,8 +24,15 @@
 
 namespace ripple {
 
+void
+somefunc(std::unique_ptr<perf::Trace> const& trace=nullptr)
+{
+      perf::add(trace, "somefunc");
+}
+
 Json::Value doLogRotate (RPC::Context& context)
 {
+    perf::gPerfLog->rotate();
     return RPC::makeObjectValue (context.app.logs().rotate());
 }
 

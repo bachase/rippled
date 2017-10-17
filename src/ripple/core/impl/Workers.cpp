@@ -19,6 +19,7 @@
 
 #include <ripple/core/impl/Workers.h>
 #include <ripple/beast/core/CurrentThreadName.h>
+#include <ripple/basics/PerfLog.h>
 #include <cassert>
 
 namespace ripple {
@@ -100,6 +101,7 @@ void Workers::setNumberOfThreads (int numberOfThreads)
         }
 
         m_numberOfThreads = numberOfThreads;
+        perf::gPerfLog->setNumberOfThreads(m_numberOfThreads);
     }
 }
 

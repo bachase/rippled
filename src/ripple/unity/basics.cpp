@@ -32,6 +32,8 @@
 #include <ripple/basics/impl/Sustain.cpp>
 #include <ripple/basics/impl/Time.cpp>
 #include <ripple/basics/impl/UptimeTimer.cpp>
+#include <ripple/basics/impl/PerfLogImpl.cpp>
+#include <ripple/basics/impl/Trace.cpp>
 
 #if DOXYGEN
 #include <ripple/basics/README.md>

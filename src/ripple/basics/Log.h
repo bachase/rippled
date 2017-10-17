@@ -20,6 +20,7 @@
 #ifndef RIPPLE_BASICS_LOG_H_INCLUDED
 #define RIPPLE_BASICS_LOG_H_INCLUDED
 
+#include <ripple/basics/Trace.h>
 #include <ripple/basics/UnorderedContainers.h>
 #include <beast/core/string.hpp>
 #include <ripple/beast/utility/Journal.h>

@@ -55,6 +55,7 @@
 #include <ripple/protocol/STParsedJSON.h>
 #include <ripple/protocol/Protocol.h>
 #include <ripple/resource/Fees.h>
+#include <ripple/basics/PerfLog.h>
 #include <ripple/beast/asio/io_latency_probe.h>
 #include <ripple/beast/core/LexicalCast.h>
 #include <boost/asio/steady_timer.hpp>
@@ -280,6 +281,7 @@ private:
 
 public:
     std::unique_ptr<Config> config_;
+    std::unique_ptr<perf::PerfLog> perfLog_;
     std::unique_ptr<Logs> logs_;
     std::unique_ptr<TimeKeeper> timeKeeper_;
 
@@ -370,6 +372,8 @@ public:
         : RootStoppable ("Application")
         , BasicApp (numberOfThreads(*config))
         , config_ (std::move(config))
+        , perfLog_ (perf::make_PerfLog(
+            perf::setup_PerfLog(config_->section("perf")),*this, *this))
         , logs_ (std::move(logs))
         , timeKeeper_ (std::move(timeKeeper))
 
@@ -1006,7 +1010,6 @@ public:
     {
         return maxDisallowedLedger_;
     }
-
 
 private:
     // For a newly-started validator, this is the greatest persisted ledger

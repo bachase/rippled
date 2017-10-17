@@ -23,6 +23,7 @@
 #include <ripple/json/to_string.h>
 #include <ripple/json/json_writer.h>
 #include <ripple/beast/core/LexicalCast.h>
+#include <string>
 
 namespace Json {
 
@@ -289,6 +290,23 @@ Value::Value ( bool value )
     value_.bool_ = value;
 }
 
+Value::Value ( std::uint64_t value )
+    : type_ ( stringValue )
+    , allocated_ ( true )
+{
+    std::string str(std::to_string(value));
+    value_.string_ = valueAllocator ()->duplicateStringValue (
+        str.c_str (), str.size() );
+}
+
+Value::Value ( std::int64_t value )
+    : type_ ( stringValue )
+    , allocated_ ( true )
+{
+    std::string str(std::to_string(value));
+    value_.string_ = valueAllocator ()->duplicateStringValue (
+        str.c_str (), str.size() );
+}
 
 Value::Value ( const Value& other )
     : type_ ( other.type_ )
@@ -344,7 +362,8 @@ Value::~Value ()
 
     case arrayValue:
     case objectValue:
-        delete value_.map_;
+        if (value_.map_)
+            delete value_.map_;
         break;
 
     default:

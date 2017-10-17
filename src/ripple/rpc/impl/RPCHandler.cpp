@@ -37,6 +37,7 @@
 #include <ripple/resource/Fees.h>
 #include <ripple/rpc/Role.h>
 #include <ripple/resource/Fees.h>
+#include <ripple/basics/PerfLog.h>
 
 namespace ripple {
 namespace RPC {
@@ -202,10 +203,14 @@ Status callMethod (
     {
         auto v = context.app.getJobQueue().makeLoadEvent(
             jtGENERIC, "cmd:" + name);
-        return method (context, result);
+        perf::gPerfLog->rpcRunning(name);
+        auto ret = method (context, result);
+        perf::gPerfLog->rpcFinished(name);
+        return ret;
     }
     catch (std::exception& e)
     {
+        perf::gPerfLog->rpcErrored(name);
         JLOG (context.j.info()) << "Caught throw: " << e.what ();
 
         if (context.loadType == Resource::feeReferenceRPC)

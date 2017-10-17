@@ -22,6 +22,8 @@
 
 #include <boost/optional.hpp>
 #include <string>
+#include <unordered_map>
+#include <type_traits>
 
 namespace ripple {
 
@@ -164,6 +166,8 @@ enum TER
     // - Applied
     // - Forwarded
     tesSUCCESS      = 0,
+    // This is used for performance logging. It is not returned as a status.
+    tesTOTAL,
 
     // 100 .. 159 C
     //   Claim fee only (ripple transaction with no good paths, pay to
@@ -214,7 +218,7 @@ enum TER
     tecINTERNAL                 = 144,
     tecOVERSIZE                 = 145,
     tecCRYPTOCONDITION_ERROR    = 146,
-    tecINVARIANT_FAILED         = 147
+    tecINVARIANT_FAILED         = 147,
 };
 
 inline bool isTelLocal(TER x)
@@ -242,10 +246,17 @@ inline bool isTesSuccess(TER x)
     return ((x) == tesSUCCESS);
 }
 
+inline bool isTesTotal(TER x)
+{
+    return ((x) == tesTOTAL);
+}
+
 inline bool isTecClaim(TER x)
 {
     return ((x) >= tecCLAIM);
 }
+
+extern std::unordered_map<std::underlying_type_t<TER>, std::string> terNames();
 
 // VFALCO TODO group these into a shell class along with the defines above.
 extern

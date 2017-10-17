@@ -131,7 +131,6 @@ private:
 public:
     BasicTaker () = delete;
     BasicTaker (BasicTaker const&) = delete;
-
     BasicTaker (
         CrossType cross_type, AccountID const& account, Amounts const& amount,
         Quality const& quality, std::uint32_t flags, Rate const& rate_in,

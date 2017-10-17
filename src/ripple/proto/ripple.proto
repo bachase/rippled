@@ -17,6 +17,7 @@ enum MessageType
     mtPROPOSE_LEDGER        = 33;
     mtSTATUS_CHANGE         = 34;
     mtHAVE_SET              = 35;
+    mtNONE                  = 40;
     mtVALIDATION            = 41;
     mtGET_OBJECTS           = 42;
 

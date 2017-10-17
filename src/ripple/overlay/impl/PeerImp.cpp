@@ -173,15 +173,29 @@ PeerImp::stop()
 //------------------------------------------------------------------------------
 
 void
-PeerImp::send (Message::pointer const& m)
+PeerImp::send (Message::pointer const& m, uint256 const txid)
 {
     if (! strand_.running_in_this_thread())
         return strand_.post(std::bind (
-            &PeerImp::send, shared_from_this(), m));
+            &PeerImp::send, shared_from_this(), m, txid));
     if(gracefulClose_)
+    {
+        if (txid != 0)
+        {
+            JLOG(journal_.debug()) << "closing not sending " << txid
+                    << " to " << remote_address_.to_string();
+        }
         return;
+    }
     if(detaching_)
+    {
+        if (txid != 0)
+        {
+            JLOG(journal_.debug()) << "detaching not sending " << txid
+                << " to " << remote_address_.to_string();
+        }
         return;
+    }
 
     overlay_.reportTraffic (
         static_cast<TrafficCount::category>(m->getCategory()),
@@ -203,13 +217,18 @@ PeerImp::send (Message::pointer const& m)
                 " sendq: " << sendq_size;
     }
 
-    send_queue_.push(m);
+    if (txid != 0)
+    {
+        JLOG(journal_.debug()) << "queueing to send " << txid
+            << " to " << remote_address_.to_string() << " " << id_;
+    }
+    send_queue_.push({m, txid});
 
     if(sendq_size != 0)
         return;
 
     boost::asio::async_write (stream_, boost::asio::buffer(
-        send_queue_.front()->getBuffer()), strand_.wrap(std::bind(
+        send_queue_.front().first->getBuffer()), strand_.wrap(std::bind(
             &PeerImp::onWriteMessage, shared_from_this(),
                 std::placeholders::_1,
                     std::placeholders::_2)));
@@ -218,6 +237,7 @@ PeerImp::send (Message::pointer const& m)
 void
 PeerImp::charge (Resource::Charge const& fee)
 {
+    JLOG(p_journal_.debug()) << "charging " << fee.to_string();
     if ((usage_.charge(fee) == Resource::drop) &&
         usage_.disconnect() && strand_.running_in_this_thread())
     {
@@ -763,12 +783,36 @@ PeerImp::onReadMessage (error_code ec, std::size_t bytes_transferred)
 void
 PeerImp::onWriteMessage (error_code ec, std::size_t bytes_transferred)
 {
+    uint256 txid;
+    if (send_queue_.size())
+        txid = send_queue_.front().second;
     if(! socket_.is_open())
+    {
+        if (txid != 0)
+        {
+            JLOG(p_journal_.debug()) << "socket not open for " << txid <<
+                    " to " << remote_address_.to_string();
+        }
         return;
+    }
     if(ec == boost::asio::error::operation_aborted)
+    {
+        if (txid != 0)
+        {
+            JLOG(p_journal_.debug()) << "asio aborted for " << txid <<
+                    " to " << remote_address_.to_string();
+        }
         return;
+    }
     if(ec)
+    {
+        if (txid != 0)
+        {
+            JLOG(p_journal_.debug()) << "onWriteMessage " << ec << " for " <<
+                    txid << " to " << remote_address_.to_string();
+        }
         return fail("onWriteMessage", ec);
+    }
     if(auto stream = journal_.trace())
     {
         if (bytes_transferred > 0)
@@ -778,13 +822,16 @@ PeerImp::onWriteMessage (error_code ec, std::size_t bytes_transferred)
             stream << "onWriteMessage";
     }
 
+    JLOG(p_journal_.debug()) << "sent " << txid << " to " <<
+            remote_address_.to_string();
+
     assert(! send_queue_.empty());
     send_queue_.pop();
     if (! send_queue_.empty())
     {
         // Timeout on writes only
         return boost::asio::async_write (stream_, boost::asio::buffer(
-            send_queue_.front()->getBuffer()), strand_.wrap(std::bind(
+            send_queue_.front().first->getBuffer()), strand_.wrap(std::bind(
                 &PeerImp::onWriteMessage, shared_from_this(),
                     std::placeholders::_1,
                         std::placeholders::_2)));
@@ -1034,9 +1081,6 @@ void
 PeerImp::onMessage (std::shared_ptr <protocol::TMTransaction> const& m)
 {
 
-    if (sanity_.load() == Sanity::insane)
-        return;
-
     if (app_.getOPs().isNeedNetworkLedger ())
     {
         // If we've never been in synch, there's nothing we can do
@@ -1052,6 +1096,12 @@ PeerImp::onMessage (std::shared_ptr <protocol::TMTransaction> const& m)
     {
         auto stx = std::make_shared<STTx const>(sit);
         uint256 txID = stx->getTransactionID ();
+        if (sanity_.load() == Sanity::insane)
+        {
+            JLOG(p_journal_.debug()) << "insane load discarding " <<
+                    txID;
+            return;
+        }
 
         int flags;
 
@@ -1090,11 +1140,13 @@ PeerImp::onMessage (std::shared_ptr <protocol::TMTransaction> const& m)
 
         if (app_.getJobQueue().getJobCount(jtTRANSACTION) > 100)
         {
-            JLOG(p_journal_.info()) << "Transaction queue is full";
+            JLOG(p_journal_.info()) << "Transaction queue is full discarding "
+                    << txID;
         }
         else if (app_.getLedgerMaster().getValidatedLedgerAge() > 4min)
         {
-            JLOG(p_journal_.trace()) << "No new transactions until synchronized";
+            JLOG(p_journal_.trace()) << "No new transactions until synchronized"
+                    " discarding " << txID;
         }
         else
         {
@@ -1815,6 +1867,8 @@ PeerImp::checkTransaction (int flags,
         {
             app_.getHashRouter().setFlags(stx->getTransactionID(), SF_BAD);
             charge (Resource::feeUnwantedData);
+            JLOG(p_journal_.debug()) << "Expired discarding " <<
+                    stx->getTransactionID();
             return;
         }
 
@@ -1828,14 +1882,16 @@ PeerImp::checkTransaction (int flags,
             {
                 if (!valid.second.empty())
                 {
-                    JLOG(p_journal_.trace()) <<
+                    JLOG(p_journal_.debug()) <<
                         "Exception checking transaction: " <<
-                            valid.second;
+                            valid.second << ", " << stx->getTransactionID();
                 }
 
                 // Probably not necessary to set SF_BAD, but doesn't hurt.
                 app_.getHashRouter().setFlags(stx->getTransactionID(), SF_BAD);
                 charge(Resource::feeInvalidSignature);
+                JLOG(p_journal_.debug()) << "Bad signature discarding " <<
+                        stx->getTransactionID();
                 return;
             }
         }
@@ -1853,11 +1909,14 @@ PeerImp::checkTransaction (int flags,
         {
             if (! reason.empty ())
             {
-                JLOG(p_journal_.trace()) <<
-                    "Exception checking transaction: " << reason;
+                JLOG(p_journal_.debug()) <<
+                    "Exception checking transaction: " << reason <<
+                        ", " << stx->getTransactionID();
             }
             app_.getHashRouter ().setFlags (stx->getTransactionID (), SF_BAD);
             charge (Resource::feeInvalidSignature);
+            JLOG(p_journal_.debug()) << "Invalid discarding " <<
+                    stx->getTransactionID();
             return;
         }
 
@@ -1869,6 +1928,8 @@ PeerImp::checkTransaction (int flags,
     {
         app_.getHashRouter ().setFlags (stx->getTransactionID (), SF_BAD);
         charge (Resource::feeBadData);
+        JLOG(p_journal_.debug()) << "Exception discarding " <<
+                stx->getTransactionID();
     }
 }
 

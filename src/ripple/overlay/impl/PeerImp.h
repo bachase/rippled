@@ -145,8 +145,9 @@ private:
     http_request_type request_;
     http_response_type response_;
     beast::http::fields const& headers_;
+    std::uint64_t txqSize_ {perf::gPerfLog->txq()};
     beast::multi_buffer write_buffer_;
-    std::queue<Message::pointer> send_queue_;
+    std::queue<std::pair<Message::pointer, uint256>> send_queue_;
     bool gracefulClose_ = false;
     int large_sendq_ = 0;
     int no_ping_ = 0;
@@ -205,7 +206,7 @@ public:
     //
 
     void
-    send (Message::pointer const& m) override;
+    send (Message::pointer const& m, uint256 const txid=uint256()) override;
 
     /** Send a set of PeerFinder endpoints as a protocol message. */
     template <class FwdIt, class = typename std::enable_if_t<std::is_same<

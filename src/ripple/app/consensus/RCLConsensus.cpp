@@ -40,6 +40,7 @@
 #include <ripple/overlay/predicates.h>
 #include <ripple/protocol/Feature.h>
 #include <ripple/protocol/digest.h>
+#include <ripple/basics/Trace.h>
 
 namespace ripple {
 
@@ -163,7 +164,8 @@ RCLConsensus::Adaptor::share(RCLCxTx const& tx)
         msg.set_receivetimestamp(
             app_.timeKeeper().now().time_since_epoch().count());
         app_.overlay().foreach (send_always(
-            std::make_shared<Message>(msg, protocol::mtTRANSACTION)));
+            std::make_shared<Message>(msg, protocol::mtTRANSACTION),
+            tx.id()));
     }
     else
     {
@@ -512,7 +514,9 @@ RCLConsensus::Adaptor::doAccept(
         // Build new open ledger
         auto lock = make_lock(app_.getMasterMutex(), std::defer_lock);
         auto sl = make_lock(ledgerMaster_.peekMutex(), std::defer_lock);
+        auto trace = perf::makeTrace("masterlock", 1);
         std::lock(lock, sl);
+        perf::add(trace, "locked");
 
         auto const lastVal = ledgerMaster_.getValidatedLedger();
         boost::optional<Rules> rules;
@@ -879,8 +883,10 @@ RCLConsensus::getJson(bool full) const
 {
     Json::Value ret;
     {
-      ScopedLockType _{mutex_};
-      ret = consensus_.getJson(full);
+        auto trace = perf::makeTrace("consensuslock", 2);
+        ScopedLockType _{mutex_};
+        perf::add(trace, "locked");
+        ret = consensus_.getJson(full);
     }
     ret["validating"] = adaptor_.validating();
     return ret;
@@ -891,7 +897,9 @@ RCLConsensus::timerEntry(NetClock::time_point const& now)
 {
     try
     {
+        auto trace = perf::makeTrace("consensuslock", 7);
         ScopedLockType _{mutex_};
+        perf::add(trace, "locked");
         consensus_.timerEntry(now);
     }
     catch (SHAMapMissingNode const& mn)
@@ -907,7 +915,9 @@ RCLConsensus::gotTxSet(NetClock::time_point const& now, RCLTxSet const& txSet)
 {
     try
     {
+        auto trace = perf::makeTrace("consensuslock", 3);
         ScopedLockType _{mutex_};
+        perf::add(trace, "locked");
         consensus_.gotTxSet(now, txSet);
     }
     catch (SHAMapMissingNode const& mn)
@@ -926,7 +936,9 @@ RCLConsensus::simulate(
     NetClock::time_point const& now,
     boost::optional<std::chrono::milliseconds> consensusDelay)
 {
+    auto trace = perf::makeTrace("consensuslock", 5);
     ScopedLockType _{mutex_};
+    perf::add(trace, "locked");
     consensus_.simulate(now, consensusDelay);
 }
 
@@ -935,7 +947,9 @@ RCLConsensus::peerProposal(
     NetClock::time_point const& now,
     RCLCxPeerPos const& newProposal)
 {
+    auto trace = perf::makeTrace("consensuslock", 4);
     ScopedLockType _{mutex_};
+    perf::add(trace, "locked");
     return consensus_.peerProposal(now, newProposal);
 }
 
@@ -978,7 +992,9 @@ RCLConsensus::startRound(
     RCLCxLedger::ID const& prevLgrId,
     RCLCxLedger const& prevLgr)
 {
+    auto trace = perf::makeTrace("consensuslock", 6);
     ScopedLockType _{mutex_};
+    perf::add(trace, "locked");
     consensus_.startRound(
         now, prevLgrId, prevLgr, adaptor_.preStartRound(prevLgr));
 }

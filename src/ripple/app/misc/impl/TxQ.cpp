@@ -609,13 +609,17 @@ TxQ::tryClearAccountQueue(Application& app, OpenView& view,
 std::pair<TER, bool>
 TxQ::apply(Application& app, OpenView& view,
     std::shared_ptr<STTx const> const& tx,
-        ApplyFlags flags, beast::Journal j)
+        ApplyFlags flags, beast::Journal j,
+            std::unique_ptr<perf::Trace> const& trace)
 {
     auto const allowEscalation =
         (view.rules().enabled(featureFeeEscalation));
     if (!allowEscalation)
     {
-        return ripple::apply(app, view, *tx, flags, j);
+        perf::start(trace, "apply.apply");
+        auto ret = ripple::apply(app, view, *tx, flags, j);
+        perf::end(trace, "apply.apply");
+        return ret;
     }
 
     auto const account = (*tx)[sfAccount];

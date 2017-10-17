@@ -65,19 +65,21 @@ enum JobType
     jtADMIN,         // An administrative operation
 
     // Special job types which are not dispatched by the job pool
-    jtPEER          ,
-    jtDISK          ,
-    jtTXN_PROC      ,
-    jtOB_SETUP      ,
-    jtPATH_FIND     ,
-    jtHO_READ       ,
-    jtHO_WRITE      ,
-    jtGENERIC       ,   // Used just to measure time
+    jtPEER,
+    jtDISK,
+    jtTXN_PROC,
+    jtOB_SETUP,
+    jtPATH_FIND,
+    jtHO_READ,
+    jtHO_WRITE,
+    jtGENERIC,   // Used just to measure time
 
     // Node store monitoring
-    jtNS_SYNC_READ  ,
-    jtNS_ASYNC_READ ,
-    jtNS_WRITE      ,
+    jtNS_SYNC_READ,
+    jtNS_ASYNC_READ,
+    jtNS_WRITE,
+    // Not a job. Used for performance counters.
+    jtTOTAL,
 };
 
 class Job

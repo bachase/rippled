@@ -440,7 +440,9 @@ public:
     RCLCxLedger::ID
     prevLedgerID() const
     {
+        auto trace = perf::makeTrace("consensuslock", 1);
         ScopedLockType _{mutex_};
+        perf::add(trace, "locked");
         return consensus_.prevLedgerID();
     }
 
@@ -460,6 +462,12 @@ public:
     parms() const
     {
         return adaptor_.parms();
+    }
+
+    std::shared_ptr<perf::Trace> const&
+    trace()
+    {
+        return consensus_.trace();
     }
 
 private:

@@ -36,6 +36,7 @@ struct TER_test : public beast::unit_test::suite
                 isTefFailure(t) ||
                 isTerRetry(t) ||
                 isTesSuccess(t) ||
+                isTesTotal(t) ||
                 isTecClaim(t);
 
             std::string token, text;

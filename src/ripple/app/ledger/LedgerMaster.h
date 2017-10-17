@@ -198,7 +198,8 @@ public:
 
     void checkAccept (std::shared_ptr<Ledger const> const& ledger);
     void checkAccept (uint256 const& hash, std::uint32_t seq);
-    void consensusBuilt (std::shared_ptr<Ledger const> const& ledger, Json::Value consensus);
+    void consensusBuilt (std::shared_ptr<Ledger const> const& ledger,
+        Json::Value consensus);
 
     LedgerIndex getBuildingLedger ();
     void setBuildingLedger (LedgerIndex index);
@@ -261,7 +262,7 @@ private:
     void advanceThread();
     // Try to publish ledgers, acquire missing ledgers.  Always called with
     // m_mutex locked.  The passed ScopedLockType is a reminder to callers.
-    void doAdvance(ScopedLockType&);
+    void doAdvance(ScopedLockType&, std::shared_ptr<perf::Trace>& trace);
     bool shouldFetchPack(std::uint32_t seq) const;
     bool shouldAcquire(
         std::uint32_t const currentLedger,
@@ -270,8 +271,7 @@ private:
         std::uint32_t const candidateLedger) const;
 
     std::vector<std::shared_ptr<Ledger const>>
-    findNewLedgersToPublish();
-
+    findNewLedgersToPublish(std::shared_ptr<perf::Trace>& trace);
     void updatePaths(Job& job);
 
     // Returns true if work started.  Always called with m_mutex locked.

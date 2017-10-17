@@ -53,7 +53,7 @@ public:
 
     virtual
     void
-    send (Message::pointer const& m) = 0;
+    send (Message::pointer const& m, uint256 const txid=uint256()) = 0;
 
     virtual
     beast::IP::Endpoint

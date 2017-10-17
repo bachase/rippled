@@ -58,6 +58,8 @@
 #include <ripple/basics/make_lock.h>
 #include <beast/core/detail/base64.hpp>
 #include <boost/asio/steady_timer.hpp>
+#include <ripple/basics/PerfLog.h>
+#include <utility>
 
 namespace ripple {
 
@@ -527,6 +529,13 @@ private:
 
     std::string getHostId (bool forAdmin);
 
+    void
+    setResult(Transaction::pointer& transaction, TER result)
+    {
+        transaction->setResult(result);
+        perf::gPerfLog->ter(result);
+    }
+
 private:
     using SubMapType = hash_map <std::uint64_t, InfoSub::wptr>;
     using SubInfoMapType = hash_map <AccountID, SubMapType>;
@@ -750,9 +759,9 @@ void NetworkOPsImp::processHeartbeatTimer ()
         // Check if the last validated ledger forces a change between these
         // states.
         if (mMode == omSYNCING)
-            setMode (omSYNCING);
+            setMode(omSYNCING);
         else if (mMode == omCONNECTED)
-            setMode (omCONNECTED);
+            setMode(omCONNECTED);
 
     }
 
@@ -892,7 +901,9 @@ void NetworkOPsImp::processTransaction (std::shared_ptr<Transaction>& transactio
     {
         // cached bad
         transaction->setStatus (INVALID);
-        transaction->setResult (temBAD_SIGNATURE);
+        setResult(transaction, temBAD_SIGNATURE);
+        JLOG(m_journal.debug()) << "Cached bad discarding " <<
+                transaction->getID();
         return;
     }
 
@@ -910,9 +921,9 @@ void NetworkOPsImp::processTransaction (std::shared_ptr<Transaction>& transactio
     if (validity.first == Validity::SigBad)
     {
         JLOG(m_journal.info()) << "Transaction has bad signature: " <<
-            validity.second;
+            validity.second << ", discarding " << transaction->getID();
         transaction->setStatus(INVALID);
-        transaction->setResult(temBAD_SIGNATURE);
+        setResult(transaction, temBAD_SIGNATURE);
         app_.getHashRouter().setFlags(transaction->getID(),
             SF_BAD);
         return;
@@ -1017,9 +1028,10 @@ void NetworkOPsImp::apply (std::unique_lock<std::mutex>& batchLock)
         auto lock = make_lock(app_.getMasterMutex());
         bool changed = false;
         {
+            auto trace = perf::makeTrace("masterlock", 2);
             std::lock_guard <std::recursive_mutex> lock (
                 m_ledgerMaster.peekMutex());
-
+            perf::add(trace, "locked");
             app_.openLedger().modify(
                 [&](OpenView& view, beast::Journal j)
             {
@@ -1030,9 +1042,11 @@ void NetworkOPsImp::apply (std::unique_lock<std::mutex>& batchLock)
                     if (e.admin)
                         flags = flags | tapUNLIMITED;
 
+                    perf::start(trace, "apply");
                     auto const result = app_.getTxQ().apply(
                         app_, view, e.transaction->getSTransaction(),
-                        flags, j);
+                        flags, j, trace);
+                    perf::end(trace, "apply");
                     e.result = result.first;
                     e.applied = result.second;
                     changed = changed || result.second;
@@ -1052,23 +1066,21 @@ void NetworkOPsImp::apply (std::unique_lock<std::mutex>& batchLock)
                     e.transaction->getSTransaction(), e.result);
             }
 
-            e.transaction->setResult (e.result);
+            setResult(e.transaction, e.result);
 
             if (isTemMalformed (e.result))
                 app_.getHashRouter().setFlags (e.transaction->getID(), SF_BAD);
 
-    #ifdef BEAST_DEBUG
-            if (e.result != tesSUCCESS)
             {
                 std::string token, human;
 
                 if (transResultInfo (e.result, token, human))
                 {
-                    JLOG(m_journal.info()) << "TransactionResult: "
-                            << token << ": " << human;
+                    JLOG(m_journal.debug()) << "TransactionResult: "
+                            << token << ": " << human <<
+                            " " <<e.transaction->getID();
                 }
             }
-    #endif
 
             bool addLocal = e.local;
 
@@ -1154,9 +1166,18 @@ void NetworkOPsImp::apply (std::unique_lock<std::mutex>& batchLock)
                     tx.set_receivetimestamp (app_.timeKeeper().now().time_since_epoch().count());
                     tx.set_deferred(e.result == terQUEUED);
                     // FIXME: This should be when we received it
+                    if (toSkip->size())
+                    {
+                        std::stringstream ss;
+                        ss << "forwarding " << e.transaction->getID() <<
+                            "skipping ";
+                        for (auto const &skip : *toSkip)
+                            ss << skip << " ";
+                        JLOG(m_journal.debug()) << ss.str();
+                    }
                     app_.overlay().foreach (send_if_not (
                         std::make_shared<Message> (tx, protocol::mtTRANSACTION),
-                        peer_in_set(*toSkip)));
+                        peer_in_set(*toSkip), e.transaction->getID()));
                 }
             }
         }
@@ -1384,7 +1405,7 @@ bool NetworkOPsImp::checkLastClosedLedger (
     JLOG(m_journal.info()) << "Net LCL " << closedLedger;
 
     if ((mMode == omTRACKING) || (mMode == omFULL))
-        setMode (omCONNECTED);
+        setMode(omCONNECTED);
 
     if (consensus)
     {
@@ -1482,6 +1503,7 @@ bool NetworkOPsImp::beginConsensus (uint256 const& networkClosed)
     app_.validators().onConsensusStart (
         app_.getValidations().getCurrentPublicKeys ());
 
+    perf::open(mConsensus.trace(), "consensus", closingInfo.seq);
     mConsensus.startRound (
         app_.timeKeeper().closeTime(),
         networkClosed,
@@ -1587,7 +1609,7 @@ void NetworkOPsImp::endConsensus ()
 void NetworkOPsImp::consensusViewChange ()
 {
     if ((mMode == omFULL) || (mMode == omTRACKING))
-        setMode (omCONNECTED);
+        setMode(omCONNECTED);
 }
 
 void NetworkOPsImp::pubManifest (Manifest const& mo)

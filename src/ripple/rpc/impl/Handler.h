@@ -23,6 +23,8 @@
 #include <ripple/core/Config.h>
 #include <ripple/rpc/RPCHandler.h>
 #include <ripple/rpc/Status.h>
+#include <string>
+#include <vector>
 
 namespace Json {
 class Object;
@@ -61,6 +63,9 @@ Json::Value makeObjectValue (
     result[field] = value;
     return result;
 }
+
+/** Return names of all handlers. */
+std::vector<char const*> const getHandlerNames();
 
 } // RPC
 } // ripple

@@ -152,10 +152,20 @@ transResults()
         { terQUEUED,                 { "terQUEUED",                "Held until escalated fee drops."                                               } },
 
         { tesSUCCESS,                { "tesSUCCESS",               "The transaction was applied. Only final in a validated ledger."                } },
+        { tesTOTAL,                  { "tesTOTAL",                 "Total number of codes returned, for performance tracking (not returned)."      } },
     };
     return results;
 }
 
+}
+
+std::unordered_map<std::underlying_type_t<TER>, std::string>
+terNames()
+{
+    std::unordered_map<std::underlying_type_t<TER>, std::string> ret;
+    for (auto const& i : detail::transResults())
+        ret[i.first] = i.second.first;
+    return ret;
 }
 
 bool transResultInfo (TER code, std::string& token, std::string& text)

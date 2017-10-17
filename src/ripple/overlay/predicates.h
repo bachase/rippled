@@ -33,14 +33,15 @@ struct send_always
     using return_type = void;
 
     Message::pointer const& msg;
+    uint256 txid;
 
-    send_always(Message::pointer const& m)
-        : msg(m)
+    send_always(Message::pointer const& m, uint256 const tid=uint256())
+        : msg(m), txid(tid)
     { }
 
     void operator()(std::shared_ptr<Peer> const& peer) const
     {
-        peer->send (msg);
+        peer->send (msg, txid);
     }
 };
 
@@ -85,15 +86,18 @@ struct send_if_not_pred
 
     Message::pointer const& msg;
     Predicate const& predicate;
+    uint256 txid;
 
-    send_if_not_pred(Message::pointer const& m, Predicate const& p)
-        : msg(m), predicate(p)
+    send_if_not_pred(Message::pointer const& m,
+        Predicate const& p,
+        uint256 const tid=uint256())
+        : msg(m), predicate(p), txid(tid)
     { }
 
     void operator()(std::shared_ptr<Peer> const& peer) const
     {
         if (!predicate (peer))
-            peer->send (msg);
+            peer->send (msg, txid);
     }
 };
 
@@ -101,9 +105,10 @@ struct send_if_not_pred
 template <typename Predicate>
 send_if_not_pred<Predicate> send_if_not (
     Message::pointer const& m,
-        Predicate const &f)
+        Predicate const &f,
+        uint256 txid=uint256())
 {
-    return send_if_not_pred<Predicate>(m, f);
+    return send_if_not_pred<Predicate>(m, f, txid);
 }
 
 //------------------------------------------------------------------------------

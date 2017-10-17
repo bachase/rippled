@@ -548,6 +548,10 @@ macro(setup_build_boilerplate)
     -DBOOST_NO_AUTO_PTR
     )
 
+  if (${RIPPLED_PERF})
+    add_definitions(-DRIPPLED_PERF)
+  endif()
+
   if (is_gcc)
     add_compile_options(-Wno-unused-but-set-variable -Wno-deprecated)
 

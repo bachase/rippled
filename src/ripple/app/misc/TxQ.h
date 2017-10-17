@@ -124,7 +124,8 @@ public:
     std::pair<TER, bool>
     apply(Application& app, OpenView& view,
         std::shared_ptr<STTx const> const& tx,
-            ApplyFlags flags, beast::Journal j);
+            ApplyFlags flags, beast::Journal j,
+                std::unique_ptr<perf::Trace> const& trace=nullptr);
 
     /**
         Fill the new open ledger with transactions from the queue.

@@ -34,6 +34,7 @@
 #include <ripple/app/paths/Pathfinder.h>
 #include <ripple/basics/chrono.h>
 #include <ripple/basics/Log.h>
+#include <ripple/basics/PerfLog.h>
 #include <ripple/core/Config.h>
 #include <ripple/json/json_value.h>
 #include <ripple/json/to_string.h>
@@ -193,6 +194,7 @@ public:
             std::move(config),
             logs ? std::move(logs) : std::make_unique<SuiteLogs>(suite_))
     {
+        perf::make_PerfLogTest();
         memoize(Account::master);
         Pathfinder::initPathTable();
         foreachFeature(

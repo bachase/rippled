@@ -26,6 +26,11 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <ripple/basics/ContainerAtomic.h>
+#include <cstdint>
+#include <cstddef>
+#include <unordered_map>
+#include <functional>
 
 /** \brief JSON (JavaScript Object Notation).
  */
@@ -68,27 +73,61 @@ enum CommentPlacement
  * object[code] = 1234;
  * \endcode
  */
-class StaticString
+    class StaticString
+    {
+    public:
+        constexpr explicit StaticString(const char *czstring)
+            : str_(czstring)
+        {
+        }
+
+        constexpr operator const char *() const
+        {
+            return str_;
+        }
+
+        constexpr const char *c_str() const
+        {
+            return str_;
+        }
+
+    private:
+        const char *str_;
+    };
+
+} // Json
+namespace std {
+template <>
+struct hash<Json::StaticString>
 {
-public:
-    constexpr explicit StaticString ( const char* czstring )
-        : str_ ( czstring )
+    std::size_t operator()(Json::StaticString const &k) const
     {
+        return std::hash<std::string>()(k.c_str());
     }
-
-    constexpr operator const char* () const
-    {
-        return str_;
-    }
-
-    constexpr const char* c_str () const
-    {
-        return str_;
-    }
-
-private:
-    const char* str_;
 };
+} // std
+
+namespace Json {
+
+inline bool operator< (StaticString x, StaticString y)
+{
+    return strcmp(x.c_str(), y.c_str()) < 0;
+}
+
+inline bool operator> (StaticString x, StaticString y)
+{
+    return strcmp(x.c_str(), y.c_str()) < 0;
+}
+
+inline bool operator<= (StaticString x, StaticString y)
+{
+    return strcmp(x.c_str(), y.c_str()) <= 0;
+}
+
+inline bool operator>= (StaticString x, StaticString y)
+{
+    return strcmp(x.c_str(), y.c_str()) >= 0;
+}
 
 inline bool operator== (StaticString x, StaticString y)
 {
@@ -217,6 +256,26 @@ public:
     Value ( double value );
     Value ( const char* value );
     Value ( const char* beginValue, const char* endValue );
+
+    Value ( std::uint64_t value );
+    Value ( std::int64_t value );
+
+    template <class T>
+    Value ( ripple::perf::ContainerAtomic<T> const& value )
+        : type_ (nullValue)
+    {
+        *this = static_cast<T>(value.load());
+    }
+
+    template <class T>
+    Value ( std::unordered_map<StaticString*, T> const& m )
+        : type_ (nullValue)
+    {
+        *this = Json::objectValue;
+        for (auto const& i : m)
+            this->operator[](*i.first) = Value(i.second);
+    }
+
     /** \brief Constructs a value from a static string.
 
      * Like other value string constructor but do not duplicate the string for
@@ -385,7 +444,7 @@ private:
         double real_;
         bool bool_;
         char* string_;
-        ObjectValues* map_;
+        ObjectValues* map_ = nullptr;
     } value_;
     ValueType type_ : 8;
     int allocated_ : 1;     // Notes: if declared as bool, bitfield is useless.
