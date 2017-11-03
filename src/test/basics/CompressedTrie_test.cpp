@@ -96,6 +96,16 @@ class CompressedTrie
             return it - a.ref.begin();
         }
 
+        friend Slice
+        combine(Slice const& a, Slice const& b)
+        {
+            // Return combined slice, using ref from longer slice
+            if (a.stop < b.stop)
+                return Slice(std::min(a.start, b.start), b.stop, b.ref);
+
+            return Slice(std::min(a.start, b.start), a.stop, a.ref);
+        }
+
         std::size_t start;
         std::size_t stop;
         std::string ref;
@@ -122,6 +132,13 @@ class CompressedTrie
         std::deque<NodePtr> children;
         NodePtr parent;
 
+        void
+        remove(NodePtr const& child)
+        {
+            children.erase(
+                std::remove(children.begin(), children.end(), child),
+                children.end());
+        }
         friend std::ostream&
         operator<<(std::ostream& o, Node const& s)
         {
@@ -138,6 +155,16 @@ class CompressedTrie
         while (n)
         {
             ++n->branchSupport;
+            n = n->parent;
+        }
+    }
+
+    void
+    decrementBranchSupport(NodePtr n)
+    {
+        while (n)
+        {
+            --n->branchSupport;
             n = n->parent;
         }
     }
@@ -171,40 +198,6 @@ class CompressedTrie
             }
         }
         return curr;
-    }
-
-    void
-    insertImpl(NodePtr& curr, Slice s)
-    {
-        Slice const& currSlice = curr->slice;
-        assert(currSlice.start == s.start);
-
-        auto minStop = std::min(currSlice.stop, s.stop);
-
-        auto it = std::mismatch(
-                      currSlice.ref.begin(),
-                      currSlice.ref.begin() + minStop,
-                      s.ref.begin())
-                      .first;
-        auto firstDiff = it - currSlice.ref.begin();
-
-        // firstDiff is in start, minStop
-        // Matches entire string
-        if (firstDiff == minStop)
-        {
-            // Same string!
-            if (currSlice.stop == s.stop)
-            {
-                curr->tipSupport++;
-                incrementBranchSupport(curr);
-            }
-            else
-            {
-            }
-        }
-        else  // less than entire match
-        {
-        }
     }
 
 public:
@@ -268,8 +261,48 @@ public:
         }
     }
 
-    void
-    remove(std::string const& s);
+    bool
+    remove(std::string const& sIn)
+    {
+        Slice s{sIn};
+        NodePtr loc = find(sIn);
+
+        // Find the *exact* matching node
+        if (loc)
+        {
+            // must be exact match to remove
+            if (loc->slice.stop == s.stop &&
+                (firstMismatch(loc->slice, s) == s.stop) &&
+                loc->tipSupport > 0)
+            {
+                loc->tipSupport--;
+                decrementBranchSupport(loc);
+
+                if (loc->tipSupport == 0)
+                {
+                    if (loc->children.empty())
+                    {
+                        // this node can be removed
+                        loc->parent->remove(loc);
+                    }
+                    else if (loc->children.size() == 1)
+                    {
+                        // This node can be combined with its child
+                        NodePtr child = loc->children.front();
+                        // Promote grand-children
+                        loc->children.clear();
+                        for (NodePtr const& grandChild : child->children)
+                            loc->children.push_back(grandChild);
+                        loc->tipSupport = child->tipSupport;
+                        loc->branchSupport = child->branchSupport;
+                        loc->slice = combine(loc->slice, child->slice);
+                    }
+                }
+                return true;
+            }
+        }
+        return false;
+    }
 
     std::uint32_t
     tipSupport(std::string const& sIn)
@@ -329,7 +362,7 @@ public:
     }
 
     bool
-    checkSupport()
+    checkInvariants()
     {
         std::stack<NodePtr> nodes;
         nodes.push(root);
@@ -337,6 +370,12 @@ public:
         {
             NodePtr curr = nodes.top();
             nodes.pop();
+
+            // Node with 0 tip support must have multiple children
+            if (curr->tipSupport == 0 && curr->children.size() < 2)
+                return false;
+
+            // branchSupport = tipSupport + sum(child->branchSupport)
             std::size_t support = curr->tipSupport;
             for (auto const& child : curr->children)
             {
@@ -357,43 +396,73 @@ public:
     void
     testAdd()
     {
-        CompressedTrie t;
-        t.insert("abc");
-        BEAST_EXPECT(t.checkSupport());
-        BEAST_EXPECT(t.branchSupport("ab") == 1);
-        BEAST_EXPECT(t.branchSupport("abc") == 1);
-        BEAST_EXPECT(!t.branchSupport("abcd") == 0);
-        BEAST_EXPECT(t.tipSupport("abc") == 1);
+        {
+            CompressedTrie t;
+            t.insert("abc");
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.branchSupport("ab") == 1);
+            BEAST_EXPECT(t.branchSupport("abc") == 1);
+            BEAST_EXPECT(!t.branchSupport("abcd") == 0);
+            BEAST_EXPECT(t.tipSupport("abc") == 1);
+        }
 
+        {
+            CompressedTrie t;
+            BEAST_EXPECT(t.checkInvariants());
+            t.insert("abcd");
+            BEAST_EXPECT(t.checkInvariants());
+            t.insert("abce");
+            BEAST_EXPECT(t.checkInvariants());
+            t.insert("abcf");
+            BEAST_EXPECT(t.checkInvariants());
+            t.dump(std::cout);
+        }
         // 1. Cases
         //
+    }
+
+    void
+    testRemove()
+    {
+        CompressedTrie t;
+        t.insert("abcd");
+        BEAST_EXPECT(t.checkInvariants());
+        t.insert("abce");
+        BEAST_EXPECT(t.checkInvariants());
+        BEAST_EXPECT(!t.remove("abc"));
+        t.insert("abcegh");
+        BEAST_EXPECT(t.checkInvariants());
+        t.dump(std::cout);
+        t.remove("abce");
+        BEAST_EXPECT(t.checkInvariants());
+        t.dump(std::cout);
     }
 
     void
     run()
     {
         testAdd();
-
+        testRemove();
         CompressedTrie t;
         t.insert("abc");
         t.dump(std::cout);
-        BEAST_EXPECT(t.checkSupport());
+        BEAST_EXPECT(t.checkInvariants());
         t.insert("a");
         t.dump(std::cout);
-        BEAST_EXPECT(t.checkSupport());
+        BEAST_EXPECT(t.checkInvariants());
         t.insert("bhi");
         t.dump(std::cout);
-        BEAST_EXPECT(t.checkSupport());
+        BEAST_EXPECT(t.checkInvariants());
         t.insert("ad");
         t.dump(std::cout);
-        BEAST_EXPECT(t.checkSupport());
+        BEAST_EXPECT(t.checkInvariants());
         t.insert("abcwz");
         t.dump(std::cout);
-        BEAST_EXPECT(t.checkSupport());
+        BEAST_EXPECT(t.checkInvariants());
         t.insert("abc23");
         t.dump(std::cout);
     }
-};
+};  // namespace test
 
 BEAST_DEFINE_TESTSUITE(CompressedTrie, ripple_basics, ripple);
 
