@@ -205,6 +205,7 @@ public:
     {
     }
 
+    // Insert the given string and increase tip support
     void
     insert(std::string const& sIn)
     {
@@ -261,6 +262,8 @@ public:
         }
     }
 
+    // Remove the given string/decreasing tip support
+    // @return whether it was removed
     bool
     remove(std::string const& sIn)
     {
@@ -330,7 +333,8 @@ public:
         {
             // must be prefix match
             // If s is longer than loc->slice, no branch support exists
-            if (firstMismatch(loc->slice, s) <= s.stop)
+            if (firstMismatch(loc->slice, s) <= s.stop &&
+                s.stop <= loc->slice.stop)
             {
                 return loc->branchSupport;
             }
@@ -338,6 +342,7 @@ public:
         return 0;
     }
 
+    // Helpers
     void
     dumpImpl(std::ostream& o, NodePtr const& curr, int offset) const
     {
@@ -394,73 +399,242 @@ class CompressedTrie_test : public beast::unit_test::suite
 private:
 public:
     void
-    testAdd()
+    testInsert()
     {
+        // Single entry
         {
             CompressedTrie t;
             t.insert("abc");
             BEAST_EXPECT(t.checkInvariants());
-            BEAST_EXPECT(t.branchSupport("ab") == 1);
-            BEAST_EXPECT(t.branchSupport("abc") == 1);
-            BEAST_EXPECT(!t.branchSupport("abcd") == 0);
             BEAST_EXPECT(t.tipSupport("abc") == 1);
-        }
+            BEAST_EXPECT(t.branchSupport("abc") == 1);
 
+            t.insert("abc");
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.tipSupport("abc") == 2);
+            BEAST_EXPECT(t.branchSupport("abc") == 2);
+        }
+        // Suffix of existing (extending tree)
         {
             CompressedTrie t;
+            t.insert("abc");
             BEAST_EXPECT(t.checkInvariants());
+            // extend with no siblings
+            t.insert("abcd");
+            BEAST_EXPECT(t.checkInvariants());
+
+            BEAST_EXPECT(t.tipSupport("abc") == 1);
+            BEAST_EXPECT(t.branchSupport("abc") == 2);
+            BEAST_EXPECT(t.tipSupport("abcd") == 1);
+            BEAST_EXPECT(t.branchSupport("abcd") == 1);
+
+            //extend with existing sibling
+            t.insert("abce");
+            BEAST_EXPECT(t.tipSupport("abc") == 1);
+            BEAST_EXPECT(t.branchSupport("abc") == 3);
+            BEAST_EXPECT(t.tipSupport("abcd") == 1);
+            BEAST_EXPECT(t.branchSupport("abcd") == 1);
+            BEAST_EXPECT(t.tipSupport("abce") == 1);
+            BEAST_EXPECT(t.branchSupport("abce") == 1);
+
+        }
+        // Prefix of existing node
+        {
+            CompressedTrie t;
+            t.insert("abcd");
+            BEAST_EXPECT(t.checkInvariants());
+            // prefix with no siblings
+            t.insert("abcdf");
+            BEAST_EXPECT(t.checkInvariants());
+
+            BEAST_EXPECT(t.tipSupport("abcd") == 1);
+            BEAST_EXPECT(t.branchSupport("abcd") == 2);
+            BEAST_EXPECT(t.tipSupport("abcdf") == 1);
+            BEAST_EXPECT(t.branchSupport("abcdf") == 1);
+
+            // prefix with existing child
+            t.insert("abc");
+            BEAST_EXPECT(t.checkInvariants());
+
+            BEAST_EXPECT(t.tipSupport("abc") == 1);
+            BEAST_EXPECT(t.branchSupport("abc") == 3);
+            BEAST_EXPECT(t.tipSupport("abcd") == 1);
+            BEAST_EXPECT(t.branchSupport("abcd") == 2);
+            BEAST_EXPECT(t.tipSupport("abcdf") == 1);
+            BEAST_EXPECT(t.branchSupport("abcdf") == 1);
+        }
+        // Suffix + prefix
+        {
+            CompressedTrie t;
             t.insert("abcd");
             BEAST_EXPECT(t.checkInvariants());
             t.insert("abce");
             BEAST_EXPECT(t.checkInvariants());
+
+            BEAST_EXPECT(t.tipSupport("abc") == 0);
+            BEAST_EXPECT(t.branchSupport("abc") == 2);
+            BEAST_EXPECT(t.tipSupport("abcd") == 1);
+            BEAST_EXPECT(t.branchSupport("abcd") == 1);
+            BEAST_EXPECT(t.tipSupport("abce") == 1);
+            BEAST_EXPECT(t.branchSupport("abce") == 1);
+        }
+        // Suffix + prefix with existing child
+        {
+            //  abcd : abcde, abcf
+
+            CompressedTrie t;
+            t.insert("abcd");
+            BEAST_EXPECT(t.checkInvariants());
+            t.insert("abcde");
+            BEAST_EXPECT(t.checkInvariants());
             t.insert("abcf");
             BEAST_EXPECT(t.checkInvariants());
-            t.dump(std::cout);
+
+            BEAST_EXPECT(t.tipSupport("abc") == 0);
+            BEAST_EXPECT(t.branchSupport("abc") == 3);
+            BEAST_EXPECT(t.tipSupport("abcd") == 1);
+            BEAST_EXPECT(t.branchSupport("abcd") == 2);
+            BEAST_EXPECT(t.tipSupport("abcf") == 1);
+            BEAST_EXPECT(t.branchSupport("abcf") == 1);
+            BEAST_EXPECT(t.tipSupport("abcde") == 1);
+            BEAST_EXPECT(t.branchSupport("abcde") == 1);
         }
-        // 1. Cases
-        //
     }
 
     void
     testRemove()
     {
-        CompressedTrie t;
-        t.insert("abcd");
-        BEAST_EXPECT(t.checkInvariants());
-        t.insert("abce");
-        BEAST_EXPECT(t.checkInvariants());
-        BEAST_EXPECT(!t.remove("abc"));
-        t.insert("abcegh");
-        BEAST_EXPECT(t.checkInvariants());
-        t.dump(std::cout);
-        t.remove("abce");
-        BEAST_EXPECT(t.checkInvariants());
-        t.dump(std::cout);
+        // Not in trie
+        {
+            CompressedTrie t;
+            t.insert("abc");
+
+            BEAST_EXPECT(!t.remove("ab"));
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(!t.remove("a"));
+            BEAST_EXPECT(t.checkInvariants());
+        }
+        // In trie but with 0 tip support
+        {
+            CompressedTrie t;
+            t.insert("abcd");
+            t.insert("abce");
+
+            BEAST_EXPECT(t.tipSupport("abc") == 0);
+            BEAST_EXPECT(t.branchSupport("abc") == 2);
+            BEAST_EXPECT(!t.remove("abc"));
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.tipSupport("abc") == 0);
+            BEAST_EXPECT(t.branchSupport("abc") == 2);
+
+        }
+        // In trie with > 1 tip support
+        {
+            CompressedTrie t;
+            t.insert("abc");
+            t.insert("abc");
+
+            BEAST_EXPECT(t.tipSupport("abc") == 2);
+            BEAST_EXPECT(t.remove("abc"));
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.tipSupport("abc") == 1);
+        }
+        // In trie with = 1 tip support, no children
+        {
+            CompressedTrie t;
+            t.insert("ab");
+            t.insert("abc");
+
+            BEAST_EXPECT(t.tipSupport("ab") == 1);
+            BEAST_EXPECT(t.branchSupport("ab") == 2);
+            BEAST_EXPECT(t.tipSupport("abc") == 1);
+            BEAST_EXPECT(t.branchSupport("abc") == 1);
+
+            BEAST_EXPECT(t.remove("abc"));
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.tipSupport("ab") == 1);
+            BEAST_EXPECT(t.branchSupport("ab") == 1);
+            BEAST_EXPECT(t.tipSupport("abc") == 0);
+            BEAST_EXPECT(t.branchSupport("abc") == 0);
+        }
+        // In trie with = 1 tip support, 1 child
+        {
+            CompressedTrie t;
+            t.insert("ab");
+            t.insert("abc");
+            t.insert("abcd");
+
+            BEAST_EXPECT(t.tipSupport("abc") == 1);
+            BEAST_EXPECT(t.branchSupport("abc") == 2);
+            BEAST_EXPECT(t.tipSupport("abcd") == 1);
+            BEAST_EXPECT(t.branchSupport("abcd") == 1);
+
+            BEAST_EXPECT(t.remove("abc"));
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.tipSupport("abc") == 0);
+            BEAST_EXPECT(t.branchSupport("abc") == 1);
+            BEAST_EXPECT(t.tipSupport("abcd") == 1);
+            BEAST_EXPECT(t.branchSupport("abcd") == 1);
+
+        }
+        // In trie with = 1 tip support, > 1 children
+        {
+            CompressedTrie t;
+            t.insert("ab");
+            t.insert("abc");
+            t.insert("abcd");
+            t.insert("abce");
+
+            BEAST_EXPECT(t.tipSupport("abc") == 1);
+            BEAST_EXPECT(t.branchSupport("abc") == 3);
+
+            BEAST_EXPECT(t.remove("abc"));
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.tipSupport("abc") == 0);
+            BEAST_EXPECT(t.branchSupport("abc") == 2);
+        }
     }
+
+    void
+    testTipAndBranchSupport()
+    {
+        CompressedTrie t;
+        BEAST_EXPECT(t.tipSupport("a") == 0);
+        BEAST_EXPECT(t.tipSupport("adfdf") == 0);
+        BEAST_EXPECT(t.branchSupport("a") == 0);
+        BEAST_EXPECT(t.branchSupport("adfdf") == 0);
+
+        t.insert("abc");
+        BEAST_EXPECT(t.tipSupport("a") == 0);
+        BEAST_EXPECT(t.tipSupport("ab") == 0);
+        BEAST_EXPECT(t.tipSupport("abc") == 1);
+        BEAST_EXPECT(t.tipSupport("abcd") == 0);
+        BEAST_EXPECT(t.branchSupport("a") == 1);
+        BEAST_EXPECT(t.branchSupport("ab") == 1);
+        BEAST_EXPECT(t.branchSupport("abc") == 1);
+        BEAST_EXPECT(t.branchSupport("abcd") == 0);
+
+        t.insert("abe");
+        BEAST_EXPECT(t.tipSupport("a") == 0);
+        BEAST_EXPECT(t.tipSupport("ab") == 0);
+        BEAST_EXPECT(t.tipSupport("abc") == 1);
+        BEAST_EXPECT(t.tipSupport("abe") == 1);
+
+        BEAST_EXPECT(t.branchSupport("a") == 2);
+        BEAST_EXPECT(t.branchSupport("ab") == 2);
+        BEAST_EXPECT(t.branchSupport("abc") == 1);
+        BEAST_EXPECT(t.branchSupport("abe") == 1);
+    }
+
+
 
     void
     run()
     {
-        testAdd();
+        testInsert();
         testRemove();
-        CompressedTrie t;
-        t.insert("abc");
-        t.dump(std::cout);
-        BEAST_EXPECT(t.checkInvariants());
-        t.insert("a");
-        t.dump(std::cout);
-        BEAST_EXPECT(t.checkInvariants());
-        t.insert("bhi");
-        t.dump(std::cout);
-        BEAST_EXPECT(t.checkInvariants());
-        t.insert("ad");
-        t.dump(std::cout);
-        BEAST_EXPECT(t.checkInvariants());
-        t.insert("abcwz");
-        t.dump(std::cout);
-        BEAST_EXPECT(t.checkInvariants());
-        t.insert("abc23");
-        t.dump(std::cout);
+        testTipAndBranchSupport();
+
     }
 };  // namespace test
 
