@@ -111,10 +111,6 @@ class CompressedTrie
         std::string ref;
     };
 
-    struct Node;
-
-    using NodePtr = std::shared_ptr<Node>;
-
     struct Node
     {
         Node(std::string const& s) : slice{s}, tipSupport{1}, branchSupport{1}
@@ -129,16 +125,22 @@ class CompressedTrie
         std::uint32_t tipSupport = 0;
         std::uint32_t branchSupport = 0;
 
-        std::deque<NodePtr> children;
-        NodePtr parent;
+        std::deque<std::unique_ptr<Node>> children;
+        Node * parent = nullptr;
 
         void
-        remove(NodePtr const& child)
+        remove(Node const* child)
         {
             children.erase(
-                std::remove(children.begin(), children.end(), child),
+                std::remove_if(
+                    children.begin(),
+                    children.end(),
+                    [child](std::unique_ptr<Node> const& curr) {
+                        return curr.get() == child;
+                    }),
                 children.end());
         }
+
         friend std::ostream&
         operator<<(std::ostream& o, Node const& s)
         {
@@ -147,10 +149,10 @@ class CompressedTrie
         }
     };
 
-    NodePtr root;
+    std::unique_ptr<Node> root;
 
     void
-    incrementBranchSupport(NodePtr n)
+    incrementBranchSupport(Node * n)
     {
         while (n)
         {
@@ -160,7 +162,7 @@ class CompressedTrie
     }
 
     void
-    decrementBranchSupport(NodePtr n)
+    decrementBranchSupport(Node * n)
     {
         while (n)
         {
@@ -169,11 +171,11 @@ class CompressedTrie
         }
     }
 
-    NodePtr
-    find(Slice s)
+    Node *
+    find(Slice s) const
     {
         // find the node with longest common prefix of slice
-        NodePtr curr = root;
+        Node * curr = root.get();
         bool done = false;
         while (curr && !done)
         {
@@ -187,12 +189,12 @@ class CompressedTrie
                 auto it = std::find_if(
                     curr->children.begin(),
                     curr->children.end(),
-                    [&](NodePtr const& child) {
+                    [&](std::unique_ptr<Node> const& child) {
                         return child->slice.ref[child->slice.start] ==
                             s.ref[child->slice.start];
                     });
                 if (it != curr->children.end())
-                    curr = *it;
+                    curr = it->get();
                 else
                     done = true;
             }
@@ -210,7 +212,7 @@ public:
     insert(std::string const& sIn)
     {
         Slice s{sIn};
-        NodePtr loc = find(sIn);
+        Node * loc = find(sIn);
         // loc is the node with the longest common prefix with sIn
 
         // determine where that prefix ends
@@ -219,7 +221,7 @@ public:
         Slice prefix = s.before(end);
         Slice oldSuffix = loc->slice.from(end);
         Slice newSuffix = s.from(end);
-        NodePtr incrementNode = loc;
+        Node * incrementNode = loc;
 
         if (!oldSuffix.empty())
         {
@@ -228,7 +230,7 @@ public:
             // -> abcd->ef->...
 
             // 1. Create ef node and take children ...
-            NodePtr newNode{std::make_shared<Node>(oldSuffix)};
+            std::unique_ptr<Node> newNode{std::make_unique<Node>(oldSuffix)};
             newNode->tipSupport = loc->tipSupport;
             newNode->branchSupport = loc->branchSupport;
             // take existing children
@@ -238,7 +240,7 @@ public:
             // 2. Turn old abcdef node into abcd and add ef as child
             loc->slice = prefix;
             newNode->parent = loc;
-            loc->children.push_back(newNode);
+            loc->children.emplace_back(std::move(newNode));
             loc->tipSupport = 0;
             incrementNode = loc;
         }
@@ -250,10 +252,11 @@ public:
             //            de
 
             // Create new child node
-            NodePtr newNode{std::make_shared<Node>(newSuffix)};
+            std::unique_ptr<Node> newNode{std::make_unique<Node>(newSuffix)};
             newNode->parent = loc;
-            loc->children.push_back(newNode);
-            incrementNode = newNode;
+            incrementNode = newNode.get();
+            loc->children.push_back(std::move(newNode));
+
         }
         if (incrementNode)
         {
@@ -268,7 +271,7 @@ public:
     remove(std::string const& sIn)
     {
         Slice s{sIn};
-        NodePtr loc = find(sIn);
+        Node * loc = find(sIn);
 
         // Find the *exact* matching node
         if (loc)
@@ -291,11 +294,11 @@ public:
                     else if (loc->children.size() == 1)
                     {
                         // This node can be combined with its child
-                        NodePtr child = loc->children.front();
+                        std::unique_ptr<Node> child =
+                            std::move(loc->children.front());
                         // Promote grand-children
                         loc->children.clear();
-                        for (NodePtr const& grandChild : child->children)
-                            loc->children.push_back(grandChild);
+                        std::swap(loc->children, child->children);
                         loc->tipSupport = child->tipSupport;
                         loc->branchSupport = child->branchSupport;
                         loc->slice = combine(loc->slice, child->slice);
@@ -308,10 +311,10 @@ public:
     }
 
     std::uint32_t
-    tipSupport(std::string const& sIn)
+    tipSupport(std::string const& sIn) const
     {
         Slice s{sIn};
-        NodePtr loc = find(sIn);
+        Node const * loc = find(sIn);
         if (loc)
         {
             // must be exact match
@@ -325,10 +328,10 @@ public:
     }
 
     std::uint32_t
-    branchSupport(std::string const& sIn)
+    branchSupport(std::string const& sIn) const
     {
         Slice s{sIn};
-        NodePtr loc = find(sIn);
+        Node const * loc = find(sIn);
         if (loc)
         {
             // must be prefix match
@@ -344,7 +347,7 @@ public:
 
     // Helpers
     void
-    dumpImpl(std::ostream& o, NodePtr const& curr, int offset) const
+    dumpImpl(std::ostream& o, std::unique_ptr<Node> const & curr, int offset) const
     {
         if (curr)
         {
@@ -354,7 +357,7 @@ public:
             std::stringstream ss;
             ss << *curr;
             o << ss.str() << std::endl;
-            for (NodePtr const& child : curr->children)
+            for (std::unique_ptr<Node> const& child : curr->children)
                 dumpImpl(o, child, offset + 1 + ss.str().size() + 2);
         }
     }
@@ -367,13 +370,13 @@ public:
     }
 
     bool
-    checkInvariants()
+    checkInvariants() const
     {
-        std::stack<NodePtr> nodes;
-        nodes.push(root);
+        std::stack<Node const *> nodes;
+        nodes.push(root.get());
         while (!nodes.empty())
         {
-            NodePtr curr = nodes.top();
+            Node const * curr = nodes.top();
             nodes.pop();
 
             // Node with 0 tip support must have multiple children
@@ -385,7 +388,7 @@ public:
             for (auto const& child : curr->children)
             {
                 support += child->branchSupport;
-                nodes.push(child);
+                nodes.push(child.get());
             }
             if (support != curr->branchSupport)
                 return false;
