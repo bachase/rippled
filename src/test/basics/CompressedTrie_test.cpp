@@ -20,7 +20,7 @@
 
 #include <BeastConfig.h>
 #include <ripple/beast/unit_test.h>
-#include <deque>
+#include <vector>
 #include <memory>
 #include <string>
 
@@ -76,6 +76,20 @@ class CompressedTrie
             return stop - start;
         }
 
+        // Tie-Breaker for comparisons
+        // This is used between sibling children that differ at ref[start]
+        char const &
+        tieBreaker() const
+        {
+            return ref[start];
+        }
+
+        std::string
+        fullStr() const
+        {
+            return ref.substr(0, stop);
+        }
+
         friend std::ostream&
         operator<<(std::ostream& o, Slice const& s)
         {
@@ -113,6 +127,10 @@ class CompressedTrie
 
     struct Node
     {
+        Node() : slice{""}, tipSupport{0}, branchSupport{0}
+        {
+        }
+
         Node(std::string const& s) : slice{s}, tipSupport{1}, branchSupport{1}
         {
         }
@@ -125,7 +143,7 @@ class CompressedTrie
         std::uint32_t tipSupport = 0;
         std::uint32_t branchSupport = 0;
 
-        std::deque<std::unique_ptr<Node>> children;
+        std::vector<std::unique_ptr<Node>> children;
         Node * parent = nullptr;
 
         void
@@ -203,7 +221,7 @@ class CompressedTrie
     }
 
 public:
-    CompressedTrie() : root{std::make_unique<Node>("")}
+    CompressedTrie()
     {
     }
 
@@ -213,6 +231,13 @@ public:
     {
         Slice s{sIn};
         Node * loc = find(sIn);
+
+        // root is empty
+        if(!loc)
+        {
+            root = std::make_unique<Node>(sIn);
+            return;
+        }
         // loc is the node with the longest common prefix with sIn
 
         // determine where that prefix ends
@@ -345,6 +370,71 @@ public:
         return 0;
     }
 
+    Slice
+    getPreferred()
+    {
+        Node * curr = root.get();
+        // boost::none instead?
+        if(!curr)
+            return Slice{""};
+
+        bool done = false;
+        std::uint32_t prefixSupport = curr ? curr->tipSupport : 0;
+        while(curr && !done)
+        {
+            // If the best child has margin exceeding the latent support
+            // continue from that child, otherwise we are done
+
+            Node * best = nullptr;
+            std::uint32_t margin = 0;
+
+            if(curr->children.empty())
+            {
+                // nothing
+            }
+            else if(curr->children.size() == 1)
+            {
+                best = curr->children[0].get();
+                margin = best->branchSupport;
+            }
+            else
+            {
+                // sort placing children with largest branch support in the
+                // front, breaking ties with tieBreaker field
+                std::partial_sort(
+                    curr->children.begin(),
+                    curr->children.begin() + 2,
+                    curr->children.end(),
+                    [](std::unique_ptr<Node> const& a,
+                       std::unique_ptr<Node> const& b) {
+                        return std::tie(a->branchSupport, a->slice.tieBreaker()) >
+                            std::tie(b->branchSupport, b->slice.tieBreaker());
+                    });
+
+                best = curr->children[0].get();
+                margin = curr->children[0]->branchSupport -
+                    curr->children[1]->branchSupport;
+
+                // If best holds the tie-breaker, it has a one larger margin
+                // since the second best needs additional branchSupport
+                // to overcome the tie
+                if (best->slice.tieBreaker() >
+                    curr->children[1]->slice.tieBreaker())
+                    margin++;
+            }
+
+            if (best && ((margin > prefixSupport) || (prefixSupport == 0)))
+            {
+                prefixSupport += curr->tipSupport;
+                curr = best;
+            }
+            else // current is the best
+                done = true;
+        }
+        return curr->slice;
+    }
+
+
     // Helpers
     void
     dumpImpl(std::ostream& o, std::unique_ptr<Node> const & curr, int offset) const
@@ -378,6 +468,8 @@ public:
         {
             Node const * curr = nodes.top();
             nodes.pop();
+            if(!curr)
+                continue;
 
             // Node with 0 tip support must have multiple children
             if (curr->tipSupport == 0 && curr->children.size() < 2)
@@ -630,13 +722,109 @@ public:
     }
 
 
+    void
+    testGetPreferred()
+    {
 
+        // Empty
+        {
+            CompressedTrie t;
+            BEAST_EXPECT(t.getPreferred().empty());
+        }
+        // Single node no children
+        {
+            CompressedTrie t;
+            t.insert("abc");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+        }
+        // Single node smaller child support
+        {
+            CompressedTrie t;
+            t.insert("abc");
+            t.insert("abcd");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+
+            t.insert("abc");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+        }
+        // Single node larger child
+        {
+            CompressedTrie t;
+            t.insert("abc");
+            t.insert("abcd");
+            t.insert("abcd");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abcd");
+        }
+        // Single node smaller children support
+        {
+            CompressedTrie t;
+            t.insert("abc");
+            t.insert("abcd");
+            t.insert("abce");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+
+            t.insert("abc");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+        }
+        // Single node larger children
+        {
+            CompressedTrie t;
+            t.insert("abc");
+            t.insert("abcd");
+            t.insert("abcd");
+            t.insert("abce");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+            t.insert("abcd");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abcd");
+
+        }
+        // Tie-breaker
+        {
+            CompressedTrie t;
+            t.insert("abcd");
+            t.insert("abcd");
+            t.insert("abce");
+            t.insert("abce");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abce");
+
+            t.insert("abcd");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abcd");
+        }
+
+        // Tie-breaker not needed
+        {
+            CompressedTrie t;
+            t.insert("abc");
+            t.insert("abcd");
+            t.insert("abce");
+            t.insert("abce");
+            // abce only has a margin of 1, but it owns the tie-breaker
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abce");
+
+            t.remove("abc");
+            t.insert("abcd");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abce");
+        }
+
+        // Single node larger grand child
+        {
+            CompressedTrie t;
+            t.insert("abc");
+            t.insert("abcd");
+            t.insert("abcd");
+            t.insert("abcde");
+            t.insert("abcde");
+            t.insert("abcde");
+            BEAST_EXPECT(t.getPreferred().fullStr() == "abcde");
+        }
+    }
     void
     run()
     {
         testInsert();
         testRemove();
         testTipAndBranchSupport();
+        testGetPreferred();
 
     }
 };  // namespace test
