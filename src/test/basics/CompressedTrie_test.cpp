@@ -221,7 +221,7 @@ class CompressedTrie
     }
 
 public:
-    CompressedTrie()
+    CompressedTrie() : root{std::make_unique<Node>()}
     {
     }
 
@@ -232,12 +232,6 @@ public:
         Slice s{sIn};
         Node * loc = find(sIn);
 
-        // root is empty
-        if(!loc)
-        {
-            root = std::make_unique<Node>(sIn);
-            return;
-        }
         // loc is the node with the longest common prefix with sIn
 
         // determine where that prefix ends
@@ -296,6 +290,11 @@ public:
     remove(std::string const& sIn)
     {
         Slice s{sIn};
+
+        // Cannot remove an empty slice
+        if(s.empty())
+            return false;
+
         Node * loc = find(sIn);
 
         // Find the *exact* matching node
@@ -374,12 +373,9 @@ public:
     getPreferred()
     {
         Node * curr = root.get();
-        // boost::none instead?
-        if(!curr)
-            return Slice{""};
 
         bool done = false;
-        std::uint32_t prefixSupport = curr ? curr->tipSupport : 0;
+        std::uint32_t prefixSupport = curr->tipSupport;
         while(curr && !done)
         {
             // If the best child has margin exceeding the latent support
@@ -425,7 +421,7 @@ public:
 
             if (best && ((margin > prefixSupport) || (prefixSupport == 0)))
             {
-                prefixSupport += curr->tipSupport;
+                prefixSupport += best->tipSupport;
                 curr = best;
             }
             else // current is the best
@@ -472,7 +468,9 @@ public:
                 continue;
 
             // Node with 0 tip support must have multiple children
-            if (curr->tipSupport == 0 && curr->children.size() < 2)
+            // unless it is the root node
+            if (curr != root.get() && curr->tipSupport == 0 &&
+                curr->children.size() < 2)
                 return false;
 
             // branchSupport = tipSupport + sum(child->branchSupport)
@@ -815,9 +813,39 @@ public:
             t.insert("abcde");
             t.insert("abcde");
             t.insert("abcde");
+            t.insert("abcde");
             BEAST_EXPECT(t.getPreferred().fullStr() == "abcde");
         }
     }
+
+
+    void
+    testRootRelated()
+    {
+        // Since the root is a special node that breaks the no-single child
+        // invariant, do some tests that exercise it.
+
+        CompressedTrie t;
+        BEAST_EXPECT(!t.remove(""));
+        BEAST_EXPECT(t.branchSupport("") == 0);
+        BEAST_EXPECT(t.tipSupport("") == 0);
+
+        t.insert("a");
+        BEAST_EXPECT(t.checkInvariants());
+        BEAST_EXPECT(t.branchSupport("") == 1);
+        BEAST_EXPECT(t.tipSupport("") == 0);
+
+        t.insert("e");
+        BEAST_EXPECT(t.checkInvariants());
+        BEAST_EXPECT(t.branchSupport("") == 2);
+        BEAST_EXPECT(t.tipSupport("") == 0);
+
+        BEAST_EXPECT(t.remove("e"));
+        BEAST_EXPECT(t.checkInvariants());
+        BEAST_EXPECT(t.branchSupport("") == 1);
+        BEAST_EXPECT(t.tipSupport("") == 0);
+    }
+
     void
     run()
     {
@@ -825,6 +853,7 @@ public:
         testRemove();
         testTipAndBranchSupport();
         testGetPreferred();
+        testRootRelated();
 
     }
 };  // namespace test
