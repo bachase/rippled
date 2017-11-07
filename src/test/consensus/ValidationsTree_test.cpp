@@ -147,7 +147,7 @@ class ValidationTree
     NodePtr root;
 
     void
-    incrementBranchSupport(NodePtr curr)
+    incBranchSupport(NodePtr curr)
     {
         while(curr)
         {
@@ -167,7 +167,7 @@ class ValidationTree
         if(curr->id == ledger.id())
         {
             curr->tipSupport++;
-            incrementBranchSupport(curr);
+            incBranchSupport(curr);
         }
         else
         {
@@ -202,7 +202,7 @@ class ValidationTree
                 newNode->parent = curr;
 
                 curr->children.emplace(std::move(newNode));
-                incrementBranchSupport(curr);
+                incBranchSupport(curr);
             }
             // Common prefix with a child
             else

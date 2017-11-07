@@ -34,59 +34,43 @@ class CompressedTrie
     */
     class Span
     {
+        std::size_t start_;
+        std::size_t end_;
+        std::string ref_;
     public:
-        std::size_t start;
-        std::size_t stop;
-        std::string ref;
-
-        Span(std::size_t start_, std::size_t stop_, std::string const& r_)
-            : start{start_}, stop{stop_}, ref{r_}
+        Span(std::string s) : start_{0}, end_{s.size()}, ref_{std::move(s)}
         {
-            assert(start <= stop);
+
         }
 
-        // Return a span of this over the half-open interval (from,to]
-        Span
-        sub(std::size_t from, std::size_t to)
+        Span() : start_{0}, end_{0}, ref_{}
         {
-            auto clamp = [&](std::size_t val) {
-                return std::min(std::max(start, val), stop);
-            };
-
-            return Span(clamp(from), clamp(to), ref);
         }
 
-    public:
-
-        Span(std::string s) : start{0}, stop{s.size()}, ref{std::move(s)}
+        std::size_t
+        end() const
         {
-
+            return end_;
         }
 
         // Return a view of this string starting from offset spot.
         Span
         from(std::size_t spot)
         {
-            return sub(spot, stop);
+            return sub(spot, end_);
         }
 
         // Return a view of this string ending (before) at offset spot
         Span
         before(std::size_t spot)
         {
-            return sub(start, spot);
+            return sub(start_, spot);
         }
 
         bool
         empty() const
         {
-            return start >= stop;
-        }
-
-        std::size_t
-        size() const
-        {
-            return stop - start;
+            return start_ >= end_;
         }
 
         // Tie-Breaker for comparisons
@@ -94,78 +78,68 @@ class CompressedTrie
         char const &
         tieBreaker() const
         {
-            return ref[start];
+            return ref_[start_];
         }
 
         std::string
         fullStr() const
         {
-            return ref.substr(0, stop);
+            return ref_.substr(0, end_);
         }
-
-        enum MatchType
-        {
-            None,      // The span has no overlap
-            PrefixOf,  // The span is a prefix of the object
-            SuffixOf,  // The span is a suffix of the object
-            SuffixedBy,// The object fully matches the span, but has remaining data
-            Full   // The span fully matches the object and has no remaining data
-        };
-
-        struct MatchResult
-        {
-            MatchType type;
-            std::size_t pos; // The last matching position
-        };
 
         std::size_t
         mismatch(std::string const & o) const
         {
-            std::size_t mstop = std::min(stop, o.size());
+            std::size_t mend = std::min(end_, o.size());
 
             auto it = std::mismatch(
-                          ref.begin() + start,
-                          ref.begin() + mstop,
-                          o.begin() + start)
+                          ref_.begin() + start_,
+                          ref_.begin() + mend,
+                          o.begin() + start_)
                           .first;
 
-            return (it - ref.begin());
+            return (it - ref_.begin());
+        }
+
+    private:
+       Span(std::size_t start, std::size_t end, std::string const& r)
+            : start_{start}, end_{end}, ref_{r}
+        {
+            assert(start <= end);
+        }
+
+        // Return a span of this over the half-open interval (from,to]
+        Span
+        sub(std::size_t from, std::size_t to)
+        {
+            auto clamp = [&](std::size_t val) {
+                return std::min(std::max(start_, val), end_);
+            };
+
+            return Span(clamp(from), clamp(to), ref_);
         }
 
         friend std::ostream&
         operator<<(std::ostream& o, Span const& s)
         {
-            return o << s.ref.substr(s.start, s.stop - s.start);
-        }
-
-        friend std::size_t
-        firstMismatch(Span const& a, Span const& b)
-        {
-            std::size_t start = std::max(a.start, b.start);
-            std::size_t stop = std::min(a.stop, b.stop);
-
-            auto it = std::mismatch(
-                          a.ref.begin() + start,
-                          a.ref.begin() + stop,
-                          b.ref.begin() + start)
-                          .first;
-            return it - a.ref.begin();
+            return o << s.ref_.substr(s.start_, s.end_ - s.start_);
         }
 
         friend Span
         combine(Span const& a, Span const& b)
         {
             // Return combined span, using ref from longer span
-            if (a.stop < b.stop)
-                return Span(std::min(a.start, b.start), b.stop, b.ref);
+            if (a.end_ < b.end_)
+                return Span(std::min(a.start_, b.start_), b.end_, b.ref_);
 
-            return Span(std::min(a.start, b.start), a.stop, a.ref);
+            return Span(std::min(a.start_, b.start_), a.end_, a.ref_);
         }
     };
 
+    // A node in the trie
     struct Node
     {
-        Node() : span{""}, tipSupport{0}, branchSupport{0}
+        Node() : span{}, tipSupport{0}, branchSupport{0}
         {
         }
 
@@ -205,33 +179,17 @@ class CompressedTrie
         }
     };
 
-    std::unique_ptr<Node> root;
+    /** Find the node in the trie that represents the longest common prefix with
+        `s`.
 
-    void
-    incrementBranchSupport(Node * n)
+        @return Pair of the found node and the position in `s` where the prefix
+                ends. This might be one past the last position in `s`
+                (e.g. s.size()), in which case the prefix matched `s` entirely.
+    */
+    std::pair<Node*, std::size_t>
+    find(std::string const& s) const
     {
-        while (n)
-        {
-            ++n->branchSupport;
-            n = n->parent;
-        }
-    }
-
-    void
-    decrementBranchSupport(Node * n)
-    {
-        while (n)
-        {
-            --n->branchSupport;
-            n = n->parent;
-        }
-    }
-
-    // Find the node that has the longest prefix in common with Span
-    std::pair<Node *, std::size_t>
-    find(std::string const & s) const
-    {
-        Node * curr = root.get();
+        Node* curr = root.get();
 
         // Root is always defined and is a prefix of all strings
         assert(curr);
@@ -239,17 +197,17 @@ class CompressedTrie
 
         bool done = false;
 
-        // Continue searching for a better span if the current position
+        // Continue searching for a better span as long as the current position
         // matches the entire span
-        while(!done && pos == curr->span.stop && pos < s.size())
+        while (!done && pos == curr->span.end())
         {
             done = true;
-            // All children spans are disjoint, so we continue with the first
-            // child that has a longer match
-            for(std::unique_ptr<Node> const & child : curr->children)
+            // All children spans are disjoint, so we continue if a child
+            // has a longer match
+            for (std::unique_ptr<Node> const& child : curr->children)
             {
                 auto childPos = child->span.mismatch(s);
-                if(childPos > pos)
+                if (childPos > pos)
                 {
                     done = false;
                     pos = childPos;
@@ -261,91 +219,101 @@ class CompressedTrie
         return std::make_pair(curr, pos);
     }
 
+    // The root of the trie. The root is allowed to break the no-single child
+    // invariant.
+    std::unique_ptr<Node> root;
+
+
 public:
     CompressedTrie() : root{std::make_unique<Node>()}
     {
     }
 
-    // Insert the given string and increase tip support
+    /** Insert the given item into the trie.
+    */
     void
-    insert(std::string const & s)
+    insert(std::string const& s)
     {
-        Node * loc;
+        Node* loc;
         std::size_t pos;
-        std::tie(loc,pos) = find(s);
+        std::tie(loc, pos) = find(s);
+        // There is always a place to insert
+        assert(loc);
 
-        // determine where that prefix ends
         Span sTmp{s};
         Span prefix = sTmp.before(pos);
         Span oldSuffix = loc->span.from(pos);
         Span newSuffix = sTmp.from(pos);
-        Node * incrementNode = loc;
+        Node* incNode = loc;
 
         if (!oldSuffix.empty())
         {
-            // new is a substring of current
+            // new is a prefix of current
             // e.g. abcdef->..., adding abcd
-            // -> abcd->ef->...
+            //    becomes abcd->ef->...
 
-            // 1. Create ef node and take children ...
+            // Create oldSuffix node that takes over loc
             std::unique_ptr<Node> newNode{std::make_unique<Node>(oldSuffix)};
             newNode->tipSupport = loc->tipSupport;
             newNode->branchSupport = loc->branchSupport;
-            // take existing children
             using std::swap;
             swap(newNode->children, loc->children);
 
-            // 2. Turn old abcdef node into abcd and add ef as child
+            // Loc truncates to prefix and newNode is its child
             loc->span = prefix;
             newNode->parent = loc;
             loc->children.emplace_back(std::move(newNode));
             loc->tipSupport = 0;
-            incrementNode = loc;
         }
         if (!newSuffix.empty())
         {
             //  current is a substring of new
             // e.g.  abc->... adding abcde
-            // ->   abc-> ...
-            //            de
+            // ->   abc->  ...
+            //          -> de
 
-            // Create new child node
             std::unique_ptr<Node> newNode{std::make_unique<Node>(newSuffix)};
             newNode->parent = loc;
-            incrementNode = newNode.get();
+            // increment support starting from the new node
+            incNode = newNode.get();
             loc->children.push_back(std::move(newNode));
-
         }
-        if (incrementNode)
+
+        incNode->tipSupport++;
+        while (incNode)
         {
-            incrementNode->tipSupport++;
-            incrementBranchSupport(incrementNode);
+            ++incNode->branchSupport;
+            incNode = incNode->parent;
         }
     }
 
-    // Remove the given string/decreasing tip support
-    // @return whether it was removed
+    // Decreasing tip support
+    // @return whether it was removed (last tip support)
     bool
     remove(std::string const & s)
     {
-        // Cannot remove an empty span
+        // Cannot remove empty element
         if(s.empty())
             return false;
 
-        Node * loc;
+        Node* loc;
         std::size_t pos;
-        std::tie(loc,pos) = find(s);
+        std::tie(loc, pos) = find(s);
 
-        // Find the *exact* matching node
         if (loc)
         {
-            // must be exact match to remove
-            if (loc->span.stop == s.size() &&
-                pos == s.size() &&
+            // Must be exact match with tip support
+            if (pos == loc->span.end() && pos == s.size() &&
                 loc->tipSupport > 0)
             {
                 loc->tipSupport--;
-                decrementBranchSupport(loc);
+
+                Node * decNode = loc;
+                while (decNode)
+                {
+                    --decNode->branchSupport;
+                    decNode = decNode->parent;
+                }
 
                 if (loc->tipSupport == 0)
                 {
@@ -374,20 +342,15 @@ public:
     }
 
     std::uint32_t
-    tipSupport(std::string const & s) const
+    tipSupport(std::string const& s) const
     {
-        Node const * loc;
+        Node const* loc;
         std::size_t pos;
-        std::tie(loc,pos) = find(s);
+        std::tie(loc, pos) = find(s);
 
-        if (loc)
-        {
-            // must be exact match
-            if (loc->span.stop == s.size() && pos == s.size())
-            {
-                return loc->tipSupport;
-            }
-        }
+        // Exact match
+        if (loc && pos == loc->span.end() && pos == s.size())
+            return loc->tipSupport;
         return 0;
     }
 
@@ -398,16 +361,9 @@ public:
         std::size_t pos;
         std::tie(loc,pos) = find(s);
 
-        if (loc)
-        {
-            // must be prefix match
-            // If s is longer than loc->span, no branch support exists
-            if (pos <= s.size() &&
-                s.size() <= loc->span.stop)
-            {
-                return loc->branchSupport;
-            }
-        }
+        // Prefix or exact match
+        if (loc && pos <= s.size() && s.size() <= loc->span.end())
+            return loc->branchSupport;
         return 0;
     }
 
@@ -420,22 +376,18 @@ public:
         std::uint32_t prefixSupport = curr->tipSupport;
         while(curr && !done)
         {
-            // If the best child has margin exceeding the latent support
+            // If the best child has margin exceeding the prefix  support
             // continue from that child, otherwise we are done
 
             Node * best = nullptr;
             std::uint32_t margin = 0;
 
-            if(curr->children.empty())
-            {
-                // nothing
-            }
-            else if(curr->children.size() == 1)
+            if(curr->children.size() == 1)
             {
                 best = curr->children[0].get();
                 margin = best->branchSupport;
             }
-            else
+            else if (!curr->children.empty())
             {
                 // sort placing children with largest branch support in the
                 // front, breaking ties with tieBreaker field
@@ -445,7 +397,8 @@ public:
                     curr->children.end(),
                     [](std::unique_ptr<Node> const& a,
                        std::unique_ptr<Node> const& b) {
-                        return std::tie(a->branchSupport, a->span.tieBreaker()) >
+                        return std::tie(
+                                   a->branchSupport, a->span.tieBreaker()) >
                             std::tie(b->branchSupport, b->span.tieBreaker());
                     });
 
