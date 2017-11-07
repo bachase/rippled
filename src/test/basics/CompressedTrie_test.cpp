@@ -27,6 +27,8 @@
 namespace ripple {
 namespace test {
 
+/** Compressed Trie
+*/
 class CompressedTrie
 {
     /** A span (or segment) of a sequence
@@ -34,16 +36,17 @@ class CompressedTrie
     */
     class Span
     {
+        // The span is the half-open interval [start,end) of d_
         std::size_t start_;
         std::size_t end_;
-        std::string ref_;
+        std::string d_;
     public:
-        Span(std::string s) : start_{0}, end_{s.size()}, ref_{std::move(s)}
+        Span(std::string s) : start_{0}, end_{s.size()}, d_{std::move(s)}
         {
 
         }
 
-        Span() : start_{0}, end_{0}, ref_{}
+        Span() : start_{0}, end_{0}, d_{}
         {
         }
 
@@ -74,17 +77,17 @@ class CompressedTrie
         }
 
         // Tie-Breaker for comparisons
-        // This is used between sibling children that differ at ref[start]
+        // This is used between sibling children that differ at seq[start]
         char const &
         tieBreaker() const
         {
-            return ref_[start_];
+            return d_[start_];
         }
 
         std::string
         fullStr() const
         {
-            return ref_.substr(0, end_);
+            return d_.substr(0, end_);
         }
 
         std::size_t
@@ -93,17 +96,17 @@ class CompressedTrie
             std::size_t mend = std::min(end_, o.size());
 
             auto it = std::mismatch(
-                          ref_.begin() + start_,
-                          ref_.begin() + mend,
+                          d_.begin() + start_,
+                          d_.begin() + mend,
                           o.begin() + start_)
                           .first;
 
-            return (it - ref_.begin());
+            return (it - d_.begin());
         }
 
     private:
        Span(std::size_t start, std::size_t end, std::string const& r)
-            : start_{start}, end_{end}, ref_{r}
+            : start_{start}, end_{end}, d_{r}
         {
             assert(start <= end);
         }
@@ -116,23 +119,23 @@ class CompressedTrie
                 return std::min(std::max(start_, val), end_);
             };
 
-            return Span(clamp(from), clamp(to), ref_);
+            return Span(clamp(from), clamp(to), d_);
         }
 
         friend std::ostream&
         operator<<(std::ostream& o, Span const& s)
         {
-            return o << s.ref_.substr(s.start_, s.end_ - s.start_);
+            return o << s.d_.substr(s.start_, s.end_ - s.start_);
         }
 
         friend Span
         combine(Span const& a, Span const& b)
         {
-            // Return combined span, using ref from longer span
+            // Return combined span, using d_ from longer span
             if (a.end_ < b.end_)
-                return Span(std::min(a.start_, b.start_), b.end_, b.ref_);
+                return Span(std::min(a.start_, b.start_), b.end_, b.d_);
 
-            return Span(std::min(a.start_, b.start_), a.end_, a.ref_);
+            return Span(std::min(a.start_, b.start_), a.end_, a.d_);
         }
     };
 

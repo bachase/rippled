@@ -23,12 +23,12 @@
 #include <set>
 #include <test/csf/Validation.h>
 #include <test/csf/ledgers.h>
-#if 0
+
 namespace ripple {
 namespace test {
 namespace csf {
 
-/** Ancestry tree of validated ledgers
+/** Ancestry trie of ledgers
 
     Combination of a compressed trie and merkle-ish tree that maintains
     validation support of recent ledgers based on their ancestry.
@@ -41,234 +41,458 @@ namespace csf {
     common. Tracking this ancestry information and relations across all validated
     ledgers is done conveniently in a compressed trie. A node in the trie is
     an ancestor of all its children. If a parent has sequence number `seq`, each
-    child has a different ledger at `seq+1`.
-
+    child has a different ledger starting at `seq+1`. The compression comes
+    from the invariant that any non-root node (with 0 tip support) has either no
+    children or multiple children. In other words, a non-root 0-tip-support node
+    can be combined with its single child.
 
     The merkle-ish property is based on the branch support calculation. Each
     node has a tipSupport, which is the number of current validations for that
     particular ledger. The branch support is the sum of the tip support and
-    the branch support of the nodes children:
+    the branch support of that node's children:
         node->branchSupport = node->tipSupport
                             + sum_(child : node->children) child->branchSupport
     This is analagous to the merkle tree property in which a nodes hash is
     the hash of the concatenation of its child node hashes.
-
 */
-class ValidationTree
+class LedgerTrie
 {
-    struct Node;
-    using NodePtr = std::shared_ptr<Node>;
-
-    struct Comparator
+    // Span of ledger history
+    class Span
     {
-        using is_transparent = std::true_type;
+        // The span is the half-open interval [start,end) of ledger_
+        Ledger::Seq start_;
+        Ledger::Seq end_;
+        Ledger const ledger_;
+    public:
+        Span(Ledger s)
+            : start_{0}
+            , end_{ledger_.seq() + Ledger::Seq{1}}
+            , ledger_{std::move(s)}
+        {
 
-        bool
-        operator()(NodePtr const& a, NodePtr const& b) const;
+        }
 
-        bool
-        operator()(NodePtr const& a, Ledger::ID const& b) const;
-
-        bool
-        operator()(Ledger::ID const& b, NodePtr const& a) const;
-    };
-
-
-    // Use SeqStr to be a (beginSeq,endSeq) and handle to ledger that covers that
-    // range
-    // Just do mismatch when getting common prefix?
-    //  Worry about optimizing later
-
-    /** Represents a ledger history sequence string which maps
-        sequence numbers to the alphabet of ledger ids.
-
-    */
-    struct SeqStr
-    {
-        SeqStr(Ledger::Seq start_, Ledger::Seq stop_, Ledger ledger_)
-            : start{start_}, stop{stop_}, ledger{ledger_}
+        Span() : start_{0}, end_{0}, ledger_{}
         {
         }
 
-
-        /** Return the sequence number of the last ledger in common
-            Assuming ledgers up to and including agreeThrough are already
-            in common.
-        */
         Ledger::Seq
-        commonPrefix(Ledger::Seq agreeThrough,  SeqStr const & other ) const
+        end() const
         {
-            Ledger::Seq stop = std::min(ledger_.seq(), other.ledger_.seq());
-
-            if(agreeThrough == stop)
-                return agreeThrough;
-
-            // We can do a binary search because
-            // We have two ranges
-            (s, ledger_.seq())
-            (s,other.ledger_.seq())
-
+            return end_;
         }
 
-        Ledger::Seq const start;
-        Ledger::Seq const stop;
-        Ledger const ledger;
+        // Return a view of this string starting from offset spot.
+        Span
+        from(Ledger::Seq spot)
+        {
+            return sub(spot, end_);
+        }
+
+        // Return a view of this string ending (before) at offset spot
+        Span
+        before(Ledger::Seq spot)
+        {
+            return sub(start_, spot);
+        }
+
+        bool
+        empty() const
+        {
+            return start_ >= end_;
+        }
+
+        Ledger::ID
+        id() const
+        {
+            return ledger_.id();
+        }
+
+        Ledger::Seq
+        mismatch(Ledger const & o) const
+        {
+            // TODO : Find the first mismatching Ledger sequence
+            assert(false);
+            return Ledger::Seq{0};
+        }
+
+    private:
+       Span(Ledger::Seq start, Ledger::Seq end, Ledger const & l)
+            : start_{start}, end_{end}, ledger_{l}
+        {
+            assert(start <= end);
+        }
+
+        // Return a span of this over the half-open interval (from,to]
+        Span
+        sub(Ledger::Seq from, Ledger::Seq to)
+        {
+            auto clamp = [&](Ledger::Seq val) {
+                return std::min(std::max(start_, val), end_);
+            };
+
+            return Span(clamp(from), clamp(to), ledger_);
+        }
+
+        friend std::ostream&
+        operator<<(std::ostream& o, Span const& s)
+        {
+            return o << s.ledger_.id();
+        }
+
+        friend Span
+        combine(Span const& a, Span const& b)
+        {
+            // Return combined span, using ledger_ from longer span
+            if (a.end_ < b.end_)
+                return Span(std::min(a.start_, b.start_), b.end_, b.ledger_);
+
+            return Span(std::min(a.start_, b.start_), a.end_, a.ledger_);
+        }
     };
 
-
-
-    // Corresponds to the inclusive range of ledgers with sequence numbers
-    //  (parent-> + 1, seq)
-    // and corresponding hashes given by SeqStr.
+    // A node in the trie
     struct Node
     {
-        SeqStr seqStr;
-
-        std::uint16_t tipSupport = 0;
-        std::uint32_t branchSupport = 0;
-
-        NodePtr parent;
-
-        // TODO: Consider flat_set; these are orderd by operator> below
-        std::set<NodePtr, Comparator> children;
-
-        Node(SeqStr seqStr_): seqStr(seqStr_)
+        Node() : span{}, tipSupport{0}, branchSupport{0}
         {
         }
 
-        inline friend bool
-        operator>(Node const& a, Node const& b)
+        Node(Ledger const& l) : span{l}, tipSupport{1}, branchSupport{1}
         {
-            return std::tie(a.branchSupport, a.id) >
-                std::tie(b.branchSupport, b.id);
+        }
+
+        Node(Span s) : span{std::move(s)}
+        {
+        }
+
+        Span span;
+        std::uint32_t tipSupport = 0;
+        std::uint32_t branchSupport = 0;
+
+        std::vector<std::unique_ptr<Node>> children;
+        Node * parent = nullptr;
+
+        void
+        remove(Node const* child)
+        {
+            children.erase(
+                std::remove_if(
+                    children.begin(),
+                    children.end(),
+                    [child](std::unique_ptr<Node> const& curr) {
+                        return curr.get() == child;
+                    }),
+                children.end());
+        }
+
+        friend std::ostream&
+        operator<<(std::ostream& o, Node const& s)
+        {
+            return o << s.span << "(T:" << s.tipSupport
+                     << ",B:" << s.branchSupport << ")";
         }
     };
 
-    NodePtr root;
+    /** Find the node in the trie that represents the longest common ancetry
+        with the given ledger.
 
-    void
-    incBranchSupport(NodePtr curr)
+        @return Pair of the found node and the sequence number of the first
+                ledger difference.
+    */
+    std::pair<Node*, Ledger::Seq>
+    find(Ledger const& ledger) const
     {
-        while(curr)
-        {
-            curr->branchSupport++;
-            curr = curr->parent;
-        }
-    }
+        Node* curr = root.get();
 
-    void
-    addImpl(NodePtr & curr, SeqStr seqStr)
-    {
-        // Pre-condition curr.seq() <= ledger.seq()
-        SeqStr const & nodeSeqStr= curr->seqStr;
+        // Root is always defined and is a prefix of all strings
+        assert(curr);
+        Ledger::Seq pos = curr->span.mismatch(ledger);
 
-        assert(nodeSeqStr.stop <= seqStr.stop);
-
-        if(curr->id == ledger.id())
-        {
-            curr->tipSupport++;
-            incBranchSupport(curr);
-        }
-        else
-        {
-
-            auto commonPrefix = [&](NodePtr const & other)
-            {
-                auto minSeq = std::min(ledger.seq(), other->seq);
-
-                // child represents (parent.seq() + 1 , child.seq())
-                // if ledger.seq() < child.seq(), need
-                if(ledger.seq() <= other->seq)
-                {
-                    // proper chain
-//                    ledger[other->seq] == other->id;
-                }
-                else // other is longer than ledger
-                {
-                }
-
-            };
-            auto it = std::find_if(
-                curr->children.begin(),
-                curr->children.end(),
-                [&](NodePtr const& child) { return false;});
-            // No common prefix
-            if(it == curr->children.end())
-            {
-                NodePtr newNode{
-                    std::make_shared<Node>(ledger.id(), ledger.seq())};
-                newNode->tipSupport = 1;
-                newNode->branchSupport = 1;
-                newNode->parent = curr;
-
-                curr->children.emplace(std::move(newNode));
-                incBranchSupport(curr);
-            }
-            // Common prefix with a child
-            else
-            {
-                // split child at the common spot
-            }
-        }
-    }
-public:
-    ValidationTree()
-        : root{std::make_shared<Node>(SeqStr(Ledger::Seq{0}, Ledger::Seq{0}, Ledger{}))}
-    {
-    }
-
-    // Return the ledger with the most support
-    Ledger::ID
-    getPreferred() const
-    {
-        assert (root.get() != nullptr);
-
-        Node const * preferred = root.get();
-        std::uint32_t latentSupport = preferred->tipSupport;
         bool done = false;
 
-        while (!done && !preferred->children.empty())
+        // Continue searching for a better span as long as the current position
+        // matches the entire span
+        while (!done && pos == curr->span.end())
         {
-            auto it = preferred->children.begin();
-            Node const * best = it->get();
-
-            std::uint32_t margin = best->branchSupport;
-
-            ++it;
-            if (it != preferred->children.end())
+            done = true;
+            // All children spans are disjoint, so we continue if a child
+            // has a longer match
+            for (std::unique_ptr<Node> const& child : curr->children)
             {
-                Node const * nextBest = it->get();
-                margin = margin - nextBest->branchSupport;
-                if ((best->id > nextBest->id) && margin > 1)
-                    margin = margin - 1;
+                auto childPos = child->span.mismatch(s);
+                if (childPos > pos)
+                {
+                    done = false;
+                    pos = childPos;
+                    curr = child.get();
+                    break;
+                }
             }
+        }
+        return std::make_pair(curr, pos);
+    }
 
-            if (margin > latentSupport)
-            {
-                preferred = best;
-                latentSupport = latentSupport + preferred->tipSupport;
-            }
-            else
-                done = true;
+    // The root of the trie. The root is allowed to break the no-single child
+    // invariant.
+    std::unique_ptr<Node> root;
+
+
+public:
+    LedgerTrie() : root{std::make_unique<Node>()}
+    {
+    }
+
+    /** Insert and increment the support for the given ledger.
+    */
+    void
+    insert(Ledger const & ledger)
+    {
+        Node* loc;
+        Ledger::Seq pos;
+        std::tie(loc, pos) = find(ledger);
+
+        // There is always a place to insert
+        assert(loc);
+
+        Span sTmp{ledger};
+        Span prefix = sTmp.before(pos);
+        Span oldSuffix = loc->span.from(pos);
+        Span newSuffix = sTmp.from(pos);
+        Node* incNode = loc;
+
+        if (!oldSuffix.empty())
+        {
+            // new is a prefix of current
+            // e.g. abcdef->..., adding abcd
+            //    becomes abcd->ef->...
+
+            // Create oldSuffix node that takes over loc
+            std::unique_ptr<Node> newNode{std::make_unique<Node>(oldSuffix)};
+            newNode->tipSupport = loc->tipSupport;
+            newNode->branchSupport = loc->branchSupport;
+            using std::swap;
+            swap(newNode->children, loc->children);
+
+            // Loc truncates to prefix and newNode is its child
+            loc->span = prefix;
+            newNode->parent = loc;
+            loc->children.emplace_back(std::move(newNode));
+            loc->tipSupport = 0;
+        }
+        if (!newSuffix.empty())
+        {
+            //  current is a substring of new
+            // e.g.  abc->... adding abcde
+            // ->   abc->  ...
+            //          -> de
+
+            std::unique_ptr<Node> newNode{std::make_unique<Node>(newSuffix)};
+            newNode->parent = loc;
+            // increment support starting from the new node
+            incNode = newNode.get();
+            loc->children.push_back(std::move(newNode));
         }
 
-        return preferred->id;
+        incNode->tipSupport++;
+        while (incNode)
+        {
+            ++incNode->branchSupport;
+            incNode = incNode->parent;
+        }
     }
 
-    void
-    add(Ledger const & ledger)
+    /** Decreasing tip support for a ledger, compressing if it is the
+        final node
+
+        @return Whether any ledger with tip support existed
+    */
+    bool
+    remove(Ledger const & s)
     {
-        addImpl(root, SeqStr{Ledger::Seq{0},ledger.seq(), ledger});
+        Node* loc;
+        Ledger::Seq pos;
+        std::tie(loc, pos) = find(s);
+
+        // Cannot remove root
+        if (loc && loc != root.get())
+        {
+            // Must be exact match with tip support
+            if (pos == loc->span.end() && pos > s.seq() && loc->tipSupport > 0)
+            {
+                loc->tipSupport--;
+
+                Node * decNode = loc;
+                while (decNode)
+                {
+                    --decNode->branchSupport;
+                    decNode = decNode->parent;
+                }
+
+                if (loc->tipSupport == 0)
+                {
+                    if (loc->children.empty())
+                    {
+                        // this node can be removed
+                        loc->parent->remove(loc);
+                    }
+                    else if (loc->children.size() == 1)
+                    {
+                        // This node can be combined with its child
+                        std::unique_ptr<Node> child =
+                            std::move(loc->children.front());
+                        // Promote grand-children
+                        loc->children.clear();
+                        std::swap(loc->children, child->children);
+                        loc->tipSupport = child->tipSupport;
+                        loc->branchSupport = child->branchSupport;
+                        loc->span = combine(loc->span, child->span);
+                    }
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::uint32_t
+    tipSupport(Ledger const& ledger) const
+    {
+        Node const* loc;
+        Ledger::Seq pos;
+        std::tie(loc, pos) = find(ledger);
+
+        // Exact match
+        if (loc && pos == loc->span.end() && pos > ledger.seq())
+            return loc->tipSupport;
+        return 0;
+    }
+
+    std::uint32_t
+    branchSupport(Ledger const & ledger) const
+    {
+        Node const * loc;
+        Ledger::Seq pos;
+        std::tie(loc,pos) = find(ledger);
+
+        // Prefix or exact match
+        if (loc && pos <= ledger.seq() && s.seq() < loc->span.end())
+            return loc->branchSupport;
+        return 0;
+    }
+
+    Ledger::ID
+    getPreferred()
+    {
+        Node * curr = root.get();
+
+        bool done = false;
+        std::uint32_t prefixSupport = curr->tipSupport;
+        while(curr && !done)
+        {
+            // If the best child has margin exceeding the prefix  support
+            // continue from that child, otherwise we are done
+
+            Node * best = nullptr;
+            std::uint32_t margin = 0;
+
+            if(curr->children.size() == 1)
+            {
+                best = curr->children[0].get();
+                margin = best->branchSupport;
+            }
+            else if (!curr->children.empty())
+            {
+                // sort placing children with largest branch support in the
+                // front, breaking ties with the ledger ID
+                std::partial_sort(
+                    curr->children.begin(),
+                    curr->children.begin() + 2,
+                    curr->children.end(),
+                    [](std::unique_ptr<Node> const& a,
+                       std::unique_ptr<Node> const& b) {
+                        return std::tie(a->branchSupport, a->span.id()) >
+                            std::tie(b->branchSupport, b->span.id());
+                    });
+
+                best = curr->children[0].get();
+                margin = curr->children[0]->branchSupport -
+                    curr->children[1]->branchSupport;
+
+                // If best holds the tie-breaker, it has a one larger margin
+                // since the second best needs additional branchSupport
+                // to overcome the tie
+                if (best->span.id() > curr->children[1]->span.id())
+                    margin++;
+            }
+
+            if (best && ((margin > prefixSupport) || (prefixSupport == 0)))
+            {
+                prefixSupport += best->tipSupport;
+                curr = best;
+            }
+            else // current is the best
+                done = true;
+        }
+        return curr->span.id();
+    }
+
+
+    // Helpers
+    void
+    dumpImpl(std::ostream& o, std::unique_ptr<Node> const & curr, int offset) const
+    {
+        if (curr)
+        {
+            if (offset > 0)
+                o << std::setw(offset) << "|-";
+
+            std::stringstream ss;
+            ss << *curr;
+            o << ss.str() << std::endl;
+            for (std::unique_ptr<Node> const& child : curr->children)
+                dumpImpl(o, child, offset + 1 + ss.str().size() + 2);
+        }
     }
 
     void
-    remove(Ledger const & ledger);
+    dump(std::ostream& o) const
+    {
+        // DFS
+        dumpImpl(o, root, 0);
+    }
 
-    void
-    update(Ledger const & prior, Ledger const & curr);
+    bool
+    checkInvariants() const
+    {
+        std::stack<Node const *> nodes;
+        nodes.push(root.get());
+        while (!nodes.empty())
+        {
+            Node const * curr = nodes.top();
+            nodes.pop();
+            if(!curr)
+                continue;
 
-    void
-    dump(std::ostream & o);
+            // Node with 0 tip support must have multiple children
+            // unless it is the root node
+            if (curr != root.get() && curr->tipSupport == 0 &&
+                curr->children.size() < 2)
+                return false;
+
+            // branchSupport = tipSupport + sum(child->branchSupport)
+            std::size_t support = curr->tipSupport;
+            for (auto const& child : curr->children)
+            {
+                support += child->branchSupport;
+                nodes.push(child.get());
+            }
+            if (support != curr->branchSupport)
+                return false;
+        }
+        return true;
+    }
 };
 
 
@@ -282,33 +506,6 @@ class ValidationsTree_test : public beast::unit_test::suite
     void
     run() override
     {
-        using namespace csf;
-        using namespace std::chrono;
-
-        LedgerOracle oracle;
-        Ledger genesis;
-
-        Ledger curr = oracle.accept(
-            genesis,
-            TxSetType{},
-            genesis.closeTimeResolution(),
-            genesis.closeTime() + 3s);
-        // 5 validators
-        //ValidationTree tree(genesis, validators...);
-
-        //
-        // No validations yet -> take best
-        // 1 validation take it
-        // 2+ validation take majority, ties broken by id
-
-        // Once fully validate
-        // Switch to tree mode, but shouldn't change majority yet
-        // Test 1, 2+ majority for next level of validations
-
-        // Test more complex branching
-        // Test advancing ledger separately?
-
-        //BEAST_EXPECT(tree.getPreferred().id() == genesis.id());
 
     }
 };
@@ -316,4 +513,4 @@ class ValidationsTree_test : public beast::unit_test::suite
 BEAST_DEFINE_TESTSUITE(ValidationsTree, consensus, ripple);
 }  // namespace test
 }  // namespace ripple
-#endif
+
