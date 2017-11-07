@@ -29,36 +29,49 @@ namespace test {
 
 class CompressedTrie
 {
-    // a substring of an existing string
-    struct Slice
+    /** A span (or segment) of a sequence
+
+    */
+    class Span
     {
-        Slice(std::string const& s) : start{0}, stop{s.size()}, ref{s}
+    public:
+        std::size_t start;
+        std::size_t stop;
+        std::string ref;
+
+        Span(std::size_t start_, std::size_t stop_, std::string const& r_)
+            : start{start_}, stop{stop_}, ref{r_}
         {
             assert(start <= stop);
         }
-        Slice(std::size_t start_, std::size_t stop_, std::string const& r_)
-            : start{start_}, stop{stop_}, ref{r_}
-        {
-        }
 
-        // Return a slice of this over the half-open interval (from,to]
-        Slice
+        // Return a span of this over the half-open interval (from,to]
+        Span
         sub(std::size_t from, std::size_t to)
         {
             auto clamp = [&](std::size_t val) {
                 return std::min(std::max(start, val), stop);
             };
 
-            return Slice(clamp(from), clamp(to), ref);
+            return Span(clamp(from), clamp(to), ref);
         }
-        // Return a view of this string start from offset spot.
-        Slice
+
+    public:
+
+        Span(std::string s) : start{0}, stop{s.size()}, ref{std::move(s)}
+        {
+
+        }
+
+        // Return a view of this string starting from offset spot.
+        Span
         from(std::size_t spot)
         {
             return sub(spot, stop);
         }
 
-        Slice
+        // Return a view of this string ending (before) at offset spot
+        Span
         before(std::size_t spot)
         {
             return sub(start, spot);
@@ -90,14 +103,43 @@ class CompressedTrie
             return ref.substr(0, stop);
         }
 
+        enum MatchType
+        {
+            None,      // The span has no overlap
+            PrefixOf,  // The span is a prefix of the object
+            SuffixOf,  // The span is a suffix of the object
+            SuffixedBy,// The object fully matches the span, but has remaining data
+            Full   // The span fully matches the object and has no remaining data
+        };
+
+        struct MatchResult
+        {
+            MatchType type;
+            std::size_t pos; // The last matching position
+        };
+
+        std::size_t
+        mismatch(std::string const & o) const
+        {
+            std::size_t mstop = std::min(stop, o.size());
+
+            auto it = std::mismatch(
+                          ref.begin() + start,
+                          ref.begin() + mstop,
+                          o.begin() + start)
+                          .first;
+
+            return (it - ref.begin());
+        }
+
         friend std::ostream&
-        operator<<(std::ostream& o, Slice const& s)
+        operator<<(std::ostream& o, Span const& s)
         {
             return o << s.ref.substr(s.start, s.stop - s.start);
         }
 
         friend std::size_t
-        firstMismatch(Slice const& a, Slice const& b)
+        firstMismatch(Span const& a, Span const& b)
         {
             std::size_t start = std::max(a.start, b.start);
             std::size_t stop = std::min(a.stop, b.stop);
@@ -110,36 +152,32 @@ class CompressedTrie
             return it - a.ref.begin();
         }
 
-        friend Slice
-        combine(Slice const& a, Slice const& b)
+        friend Span
+        combine(Span const& a, Span const& b)
         {
-            // Return combined slice, using ref from longer slice
+            // Return combined span, using ref from longer span
             if (a.stop < b.stop)
-                return Slice(std::min(a.start, b.start), b.stop, b.ref);
+                return Span(std::min(a.start, b.start), b.stop, b.ref);
 
-            return Slice(std::min(a.start, b.start), a.stop, a.ref);
+            return Span(std::min(a.start, b.start), a.stop, a.ref);
         }
-
-        std::size_t start;
-        std::size_t stop;
-        std::string ref;
     };
 
     struct Node
     {
-        Node() : slice{""}, tipSupport{0}, branchSupport{0}
+        Node() : span{""}, tipSupport{0}, branchSupport{0}
         {
         }
 
-        Node(std::string const& s) : slice{s}, tipSupport{1}, branchSupport{1}
+        Node(std::string const& s) : span{s}, tipSupport{1}, branchSupport{1}
         {
         }
 
-        Node(Slice s) : slice{std::move(s)}
+        Node(Span s) : span{std::move(s)}
         {
         }
 
-        Slice slice;
+        Span span;
         std::uint32_t tipSupport = 0;
         std::uint32_t branchSupport = 0;
 
@@ -162,7 +200,7 @@ class CompressedTrie
         friend std::ostream&
         operator<<(std::ostream& o, Node const& s)
         {
-            return o << s.slice << "(T:" << s.tipSupport
+            return o << s.span << "(T:" << s.tipSupport
                      << ",B:" << s.branchSupport << ")";
         }
     };
@@ -189,35 +227,38 @@ class CompressedTrie
         }
     }
 
-    Node *
-    find(Slice s) const
+    // Find the node that has the longest prefix in common with Span
+    std::pair<Node *, std::size_t>
+    find(std::string const & s) const
     {
-        // find the node with longest common prefix of slice
         Node * curr = root.get();
+
+        // Root is always defined and is a prefix of all strings
+        assert(curr);
+        std::size_t pos = curr->span.mismatch(s);
+
         bool done = false;
-        while (curr && !done)
+
+        // Continue searching for a better span if the current position
+        // matches the entire span
+        while(!done && pos == curr->span.stop && pos < s.size())
         {
-            Slice const& currSlice = curr->slice;
-            if (s.stop <= currSlice.stop)
+            done = true;
+            // All children spans are disjoint, so we continue with the first
+            // child that has a longer match
+            for(std::unique_ptr<Node> const & child : curr->children)
             {
-                done = true;
-            }
-            else  // try to recurse on a matching child
-            {
-                auto it = std::find_if(
-                    curr->children.begin(),
-                    curr->children.end(),
-                    [&](std::unique_ptr<Node> const& child) {
-                        return child->slice.ref[child->slice.start] ==
-                            s.ref[child->slice.start];
-                    });
-                if (it != curr->children.end())
-                    curr = it->get();
-                else
-                    done = true;
+                auto childPos = child->span.mismatch(s);
+                if(childPos > pos)
+                {
+                    done = false;
+                    pos = childPos;
+                    curr = child.get();
+                    break;
+                }
             }
         }
-        return curr;
+        return std::make_pair(curr, pos);
     }
 
 public:
@@ -227,19 +268,17 @@ public:
 
     // Insert the given string and increase tip support
     void
-    insert(std::string const& sIn)
+    insert(std::string const & s)
     {
-        Slice s{sIn};
-        Node * loc = find(sIn);
-
-        // loc is the node with the longest common prefix with sIn
+        Node * loc;
+        std::size_t pos;
+        std::tie(loc,pos) = find(s);
 
         // determine where that prefix ends
-        auto end = firstMismatch(loc->slice, s);
-
-        Slice prefix = s.before(end);
-        Slice oldSuffix = loc->slice.from(end);
-        Slice newSuffix = s.from(end);
+        Span sTmp{s};
+        Span prefix = sTmp.before(pos);
+        Span oldSuffix = loc->span.from(pos);
+        Span newSuffix = sTmp.from(pos);
         Node * incrementNode = loc;
 
         if (!oldSuffix.empty())
@@ -257,7 +296,7 @@ public:
             swap(newNode->children, loc->children);
 
             // 2. Turn old abcdef node into abcd and add ef as child
-            loc->slice = prefix;
+            loc->span = prefix;
             newNode->parent = loc;
             loc->children.emplace_back(std::move(newNode));
             loc->tipSupport = 0;
@@ -287,22 +326,22 @@ public:
     // Remove the given string/decreasing tip support
     // @return whether it was removed
     bool
-    remove(std::string const& sIn)
+    remove(std::string const & s)
     {
-        Slice s{sIn};
-
-        // Cannot remove an empty slice
+        // Cannot remove an empty span
         if(s.empty())
             return false;
 
-        Node * loc = find(sIn);
+        Node * loc;
+        std::size_t pos;
+        std::tie(loc,pos) = find(s);
 
         // Find the *exact* matching node
         if (loc)
         {
             // must be exact match to remove
-            if (loc->slice.stop == s.stop &&
-                (firstMismatch(loc->slice, s) == s.stop) &&
+            if (loc->span.stop == s.size() &&
+                pos == s.size() &&
                 loc->tipSupport > 0)
             {
                 loc->tipSupport--;
@@ -325,7 +364,7 @@ public:
                         std::swap(loc->children, child->children);
                         loc->tipSupport = child->tipSupport;
                         loc->branchSupport = child->branchSupport;
-                        loc->slice = combine(loc->slice, child->slice);
+                        loc->span = combine(loc->span, child->span);
                     }
                 }
                 return true;
@@ -335,15 +374,16 @@ public:
     }
 
     std::uint32_t
-    tipSupport(std::string const& sIn) const
+    tipSupport(std::string const & s) const
     {
-        Slice s{sIn};
-        Node const * loc = find(sIn);
+        Node const * loc;
+        std::size_t pos;
+        std::tie(loc,pos) = find(s);
+
         if (loc)
         {
             // must be exact match
-            if (loc->slice.stop == s.stop &&
-                firstMismatch(loc->slice, s) == s.stop)
+            if (loc->span.stop == s.size() && pos == s.size())
             {
                 return loc->tipSupport;
             }
@@ -352,16 +392,18 @@ public:
     }
 
     std::uint32_t
-    branchSupport(std::string const& sIn) const
+    branchSupport(std::string const & s) const
     {
-        Slice s{sIn};
-        Node const * loc = find(sIn);
+        Node const * loc;
+        std::size_t pos;
+        std::tie(loc,pos) = find(s);
+
         if (loc)
         {
             // must be prefix match
-            // If s is longer than loc->slice, no branch support exists
-            if (firstMismatch(loc->slice, s) <= s.stop &&
-                s.stop <= loc->slice.stop)
+            // If s is longer than loc->span, no branch support exists
+            if (pos <= s.size() &&
+                s.size() <= loc->span.stop)
             {
                 return loc->branchSupport;
             }
@@ -369,7 +411,7 @@ public:
         return 0;
     }
 
-    Slice
+    std::string
     getPreferred()
     {
         Node * curr = root.get();
@@ -403,8 +445,8 @@ public:
                     curr->children.end(),
                     [](std::unique_ptr<Node> const& a,
                        std::unique_ptr<Node> const& b) {
-                        return std::tie(a->branchSupport, a->slice.tieBreaker()) >
-                            std::tie(b->branchSupport, b->slice.tieBreaker());
+                        return std::tie(a->branchSupport, a->span.tieBreaker()) >
+                            std::tie(b->branchSupport, b->span.tieBreaker());
                     });
 
                 best = curr->children[0].get();
@@ -414,8 +456,8 @@ public:
                 // If best holds the tie-breaker, it has a one larger margin
                 // since the second best needs additional branchSupport
                 // to overcome the tie
-                if (best->slice.tieBreaker() >
-                    curr->children[1]->slice.tieBreaker())
+                if (best->span.tieBreaker() >
+                    curr->children[1]->span.tieBreaker())
                     margin++;
             }
 
@@ -427,7 +469,7 @@ public:
             else // current is the best
                 done = true;
         }
-        return curr->slice;
+        return curr->span.fullStr();
     }
 
 
@@ -494,6 +536,7 @@ public:
     void
     testInsert()
     {
+        using namespace std::string_literals;
         // Single entry
         {
             CompressedTrie t;
@@ -597,6 +640,7 @@ public:
     void
     testRemove()
     {
+        using namespace std::string_literals;
         // Not in trie
         {
             CompressedTrie t;
@@ -691,6 +735,7 @@ public:
     void
     testTipAndBranchSupport()
     {
+        using namespace std::string_literals;
         CompressedTrie t;
         BEAST_EXPECT(t.tipSupport("a") == 0);
         BEAST_EXPECT(t.tipSupport("adfdf") == 0);
@@ -723,7 +768,7 @@ public:
     void
     testGetPreferred()
     {
-
+        using namespace std::string_literals;
         // Empty
         {
             CompressedTrie t;
@@ -733,17 +778,17 @@ public:
         {
             CompressedTrie t;
             t.insert("abc");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+            BEAST_EXPECT(t.getPreferred() == "abc");
         }
         // Single node smaller child support
         {
             CompressedTrie t;
             t.insert("abc");
             t.insert("abcd");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+            BEAST_EXPECT(t.getPreferred() == "abc");
 
             t.insert("abc");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+            BEAST_EXPECT(t.getPreferred() == "abc");
         }
         // Single node larger child
         {
@@ -751,7 +796,7 @@ public:
             t.insert("abc");
             t.insert("abcd");
             t.insert("abcd");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abcd");
+            BEAST_EXPECT(t.getPreferred() == "abcd");
         }
         // Single node smaller children support
         {
@@ -759,10 +804,10 @@ public:
             t.insert("abc");
             t.insert("abcd");
             t.insert("abce");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+            BEAST_EXPECT(t.getPreferred() == "abc");
 
             t.insert("abc");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+            BEAST_EXPECT(t.getPreferred() == "abc");
         }
         // Single node larger children
         {
@@ -771,9 +816,9 @@ public:
             t.insert("abcd");
             t.insert("abcd");
             t.insert("abce");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abc");
+            BEAST_EXPECT(t.getPreferred() == "abc");
             t.insert("abcd");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abcd");
+            BEAST_EXPECT(t.getPreferred() == "abcd");
 
         }
         // Tie-breaker
@@ -783,10 +828,10 @@ public:
             t.insert("abcd");
             t.insert("abce");
             t.insert("abce");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abce");
+            BEAST_EXPECT(t.getPreferred() == "abce");
 
             t.insert("abcd");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abcd");
+            BEAST_EXPECT(t.getPreferred() == "abcd");
         }
 
         // Tie-breaker not needed
@@ -797,11 +842,11 @@ public:
             t.insert("abce");
             t.insert("abce");
             // abce only has a margin of 1, but it owns the tie-breaker
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abce");
+            BEAST_EXPECT(t.getPreferred() == "abce");
 
             t.remove("abc");
             t.insert("abcd");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abce");
+            BEAST_EXPECT(t.getPreferred() == "abce");
         }
 
         // Single node larger grand child
@@ -814,7 +859,7 @@ public:
             t.insert("abcde");
             t.insert("abcde");
             t.insert("abcde");
-            BEAST_EXPECT(t.getPreferred().fullStr() == "abcde");
+            BEAST_EXPECT(t.getPreferred() == "abcde");
         }
     }
 
@@ -822,6 +867,7 @@ public:
     void
     testRootRelated()
     {
+        using namespace std::string_literals;
         // Since the root is a special node that breaks the no-single child
         // invariant, do some tests that exercise it.
 
