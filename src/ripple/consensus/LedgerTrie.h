@@ -20,9 +20,9 @@
 #ifndef RIPPLE_APP_CONSENSUS_LEDGERS_TRIE_H_INCLUDED
 #define RIPPLE_APP_CONSENSUS_LEDGERS_TRIE_H_INCLUDED
 
+#include <algorithm>
 #include <memory>
 #include <vector>
-#include <algorithm>
 
 namespace ripple {
 
@@ -34,15 +34,15 @@ namespace ripple {
     The compressed trie structure comes from recognizing that ledger history
     can be viewed as a string over the alphabet of ledger hashes. That is,
     a given ledger with sequence number `seq` defines a length `seq` string,
-    with i-th entry equal to the hash of the ancestor ledger with sequence number
-    i. "Sequence" strings with a common prefix share those ancestor ledgers in
-    common. Tracking this ancestry information and relations across all validated
-    ledgers is done conveniently in a compressed trie. A node in the trie is
-    an ancestor of all its children. If a parent has sequence number `seq`, each
-    child has a different ledger starting at `seq+1`. The compression comes
-    from the invariant that any non-root node (with 0 tip support) has either no
-    children or multiple children. In other words, a non-root 0-tip-support node
-    can be combined with its single child.
+    with i-th entry equal to the hash of the ancestor ledger with sequence
+    number i. "Sequence" strings with a common prefix share those ancestor
+    ledgers in common. Tracking this ancestry information and relations across
+    all validated ledgers is done conveniently in a compressed trie. A node in
+    the trie is an ancestor of all its children. If a parent has sequence number
+    `seq`, each child has a different ledger starting at `seq+1`. The compression
+    comes from the invariant that any non-root node (with 0 tip support) has
+    either no children or multiple children. In other words, a non-root
+    0-tip-support node can be combined with its single child.
 
     The merkle-ish property is based on the branch support calculation. Each
     node has a tipSupport, which is the number of current validations for that
@@ -56,7 +56,7 @@ namespace ripple {
 
     LedgerChain type requirements
 
-       ID .id
+       seq()
        [seq] -> id
        mismatch(other, startSeq, endSeq)
 
@@ -65,7 +65,6 @@ namespace ripple {
 template <class LedgerChain>
 class LedgerTrie
 {
-
     using Seq = typename LedgerChain::Seq;
     using ID = typename LedgerChain::ID;
 
@@ -76,22 +75,20 @@ class LedgerTrie
         Seq start_{0};
         Seq end_{1};
         LedgerChain chain_;
+
     public:
         Span() = default;
         Span(LedgerChain chain)
-            : start_{0}
-            , end_{chain.seq() + Seq{1}}
-            , chain_{std::move(chain)}
+            : start_{0}, end_{chain.seq() + Seq{1}}, chain_{std::move(chain)}
         {
-
         }
 
-
-
-        Span(Span const & s) = default;
-        Span(Span && s) = default;
-        Span& operator=(Span const &) = default;
-        Span& operator=(Span &&) = default;
+        Span(Span const& s) = default;
+        Span(Span&& s) = default;
+        Span&
+        operator=(Span const&) = default;
+        Span&
+        operator=(Span&&) = default;
 
         Seq
         end() const
@@ -135,13 +132,13 @@ class LedgerTrie
         // Return the ledger sequence number of the first difference between
         // this span and a given chain.
         Seq
-        diff(LedgerChain const & o) const
+        diff(LedgerChain const& o) const
         {
             return mismatch(chain_, o, start_, end_);
         }
 
     private:
-       Span(Seq start, Seq end, LedgerChain const & l)
+        Span(Seq start, Seq end, LedgerChain const& l)
             : start_{start}, end_{end}, chain_{l}
         {
             assert(start <= end);
@@ -161,13 +158,13 @@ class LedgerTrie
         friend std::ostream&
         operator<<(std::ostream& o, Span const& s)
         {
-            return o << s.chain_.id();
+            return o << s.chain_.lastID();
         }
 
         friend Span
         combine(Span const& a, Span const& b)
         {
-            // Return combined span, using chain_ from longer span
+            // Return combined span, using chain_ from higher sequence span
             if (a.end_ < b.end_)
                 return Span(std::min(a.start_, b.start_), b.end_, b.chain_);
 
@@ -195,10 +192,10 @@ class LedgerTrie
         std::uint32_t branchSupport = 0;
 
         std::vector<std::unique_ptr<Node>> children;
-        Node * parent = nullptr;
+        Node* parent = nullptr;
 
         void
-        remove(Node const* child)
+        erase(Node const* child)
         {
             children.erase(
                 std::remove_if(
@@ -217,7 +214,6 @@ class LedgerTrie
                      << ",B:" << s.branchSupport << ")";
         }
     };
-
 
     // The root of the trie. The root is allowed to break the no-single child
     // invariant.
@@ -263,7 +259,8 @@ class LedgerTrie
     }
 
     void
-    dumpImpl(std::ostream& o, std::unique_ptr<Node> const & curr, int offset) const
+    dumpImpl(std::ostream& o, std::unique_ptr<Node> const& curr, int offset)
+        const
     {
         if (curr)
         {
@@ -278,18 +275,15 @@ class LedgerTrie
         }
     }
 
-
-
-
 public:
     LedgerTrie() : root{std::make_unique<Node>()}
     {
     }
 
     /** Insert and increment the support for the given ledger chain.
-    */
+     */
     void
-    insert(LedgerChain const & ledgerChain)
+    insert(LedgerChain const& ledgerChain)
     {
         Node* loc;
         Seq diffSeq;
@@ -345,18 +339,18 @@ public:
         }
     }
 
-    /** Decreasing tip support for a ledger chain, compressing if possible.
+    /** Decrease tip support for a ledger chain, compressing if possible.
 
-        @return Whether any ledger chain with tip support existed
+        @return Whether a node was erased as a result
     */
     bool
-    remove(LedgerChain const & ledgerChain)
+    remove(LedgerChain const& ledgerChain)
     {
         Node* loc;
         Seq diffSeq;
         std::tie(loc, diffSeq) = find(ledgerChain);
 
-        // Cannot remove root
+        // Cannot erase root
         if (loc && loc != root.get())
         {
             // Must be exact match with tip support
@@ -365,7 +359,7 @@ public:
             {
                 loc->tipSupport--;
 
-                Node * decNode = loc;
+                Node* decNode = loc;
                 while (decNode)
                 {
                     --decNode->branchSupport;
@@ -376,8 +370,8 @@ public:
                 {
                     if (loc->children.empty())
                     {
-                        // this node can be removed
-                        loc->parent->remove(loc);
+                        // this node can be erased
+                        loc->parent->erase(loc);
                     }
                     else if (loc->children.size() == 1)
                     {
@@ -399,7 +393,7 @@ public:
     }
 
     /** Return count of support for the specific ledger chain.
-    */
+     */
     std::uint32_t
     tipSupport(LedgerChain const& ledgerChain) const
     {
@@ -414,13 +408,13 @@ public:
     }
 
     /** Return the count of branch support for the specific ledger chain
-    */
+     */
     std::uint32_t
-    branchSupport(LedgerChain const & ledgerChain) const
+    branchSupport(LedgerChain const& ledgerChain) const
     {
-        Node const * loc;
+        Node const* loc;
         Seq diffSeq;
-        std::tie(loc,diffSeq) = find(ledgerChain);
+        std::tie(loc, diffSeq) = find(ledgerChain);
 
         // Check that ledgerChain is is an exact match or proper
         // prefix of loc
@@ -448,19 +442,19 @@ public:
     ID
     getPreferred()
     {
-        Node * curr = root.get();
+        Node* curr = root.get();
 
         bool done = false;
         std::uint32_t prefixSupport = curr->tipSupport;
-        while(curr && !done)
+        while (curr && !done)
         {
             // If the best child has margin exceeding the prefix  support
             // continue from that child, otherwise we are done
 
-            Node * best = nullptr;
+            Node* best = nullptr;
             std::uint32_t margin = 0;
 
-            if(curr->children.size() == 1)
+            if (curr->children.size() == 1)
             {
                 best = curr->children[0].get();
                 margin = best->branchSupport;
@@ -495,15 +489,14 @@ public:
                 prefixSupport += best->tipSupport;
                 curr = best;
             }
-            else // current is the best
+            else  // current is the best
                 done = true;
         }
         return curr->span.lastID();
     }
 
-
     /** Dump an ascii representation of the trie to the stream
-    */
+     */
     void
     dump(std::ostream& o) const
     {
@@ -511,17 +504,17 @@ public:
     }
 
     /** Check the compressed trie and support invariants.
-    */
+     */
     bool
     checkInvariants() const
     {
-        std::stack<Node const *> nodes;
+        std::stack<Node const*> nodes;
         nodes.push(root.get());
         while (!nodes.empty())
         {
-            Node const * curr = nodes.top();
+            Node const* curr = nodes.top();
             nodes.pop();
-            if(!curr)
+            if (!curr)
                 continue;
 
             // Node with 0 tip support must have multiple children
@@ -544,5 +537,5 @@ public:
     }
 };
 
-}
+}  // namespace ripple
 #endif
