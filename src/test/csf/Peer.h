@@ -527,7 +527,7 @@ struct Peer
             // Only send validation if the new ledger is compatible with our
             // fully validated ledger
             bool const isCompatible =
-                oracle.isAncestor(fullyValidatedLedger, newLedger);
+                newLedger.isAncestor(fullyValidatedLedger);
 
             if (runAsValidator && isCompatible)
             {
@@ -830,7 +830,7 @@ struct Peer
             lastClosedLedger.parentID(),
             earliestAllowedSeq());
 
-        // Between rounds, we take the majority ledger and use the 
+        // Between rounds, we take the majority ledger and use the
         Ledger::ID const bestLCL =
             getPreferredLedger(lastClosedLedger.id(), valDistribution);
 

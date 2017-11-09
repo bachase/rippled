@@ -94,6 +94,11 @@ private:
         //! Parent ledger close time
         NetClock::time_point parentCloseTime;
 
+        //! IDs of this ledgers ancestors. Since each ledger already has unique
+        //! ancestors based on the parentID, this member is not needed foor any
+        //! of the operators below.
+        std::vector<Ledger::ID> ancestors;
+
         auto
         asTie() const
         {
@@ -189,6 +194,22 @@ public:
         return instance_->txs;
     }
 
+    /** Determine whether ancestor is really an ancestor of this ledger */
+    bool
+    isAncestor(Ledger const& ancestor) const;
+
+    /** Return the id of the ancestor with the given seq (if exists/known)
+     */
+    boost::optional<ID>
+    operator[](Seq seq) const;
+
+    /** Return the sequence number of the first mismatching ancestor in the half
+        open interval [start,seq)
+    */
+    friend
+    Ledger::Seq
+    mismatch(Ledger const & a, Ledger const & o, Seq start, Seq end);
+
     Json::Value getJson() const;
 
     friend bool
@@ -237,10 +258,6 @@ public:
     accept(Ledger const & curr, TxSetType const& txs,
         NetClock::duration closeTimeResolution,
         NetClock::time_point const& consensusCloseTime);
-
-    /** Determine whether ancestor is really an ancestor of descendent */
-    bool
-    isAncestor(Ledger const & ancestor, Ledger const& descendant) const;
 
     /** Determine the number of distinct branches for the set of ledgers.
 
