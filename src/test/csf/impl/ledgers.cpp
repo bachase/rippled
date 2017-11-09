@@ -81,7 +81,7 @@ mismatch(Ledger const& a, Ledger const& b, Ledger::Seq start, Ledger::Seq end)
         else
             count = step;
     }
-    return count;
+    return start;
 }
 
 LedgerOracle::LedgerOracle()
