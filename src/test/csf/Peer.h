@@ -555,7 +555,7 @@ struct Peer
             // Only send validation if the new ledger is compatible with our
             // fully validated ledger
             bool const isCompatible =
-                oracle.isAncestor(fullyValidatedLedger, newLedger);
+                newLedger.isAncestor(fullyValidatedLedger);
 
             if (runAsValidator && isCompatible)
             {
