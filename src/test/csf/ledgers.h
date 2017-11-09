@@ -259,6 +259,17 @@ public:
         NetClock::duration closeTimeResolution,
         NetClock::time_point const& consensusCloseTime);
 
+    Ledger
+    accept(Ledger const& curr, Tx tx)
+    {
+        using namespace std::chrono_literals;
+        return accept(
+            curr,
+            TxSetType{tx},
+            curr.closeTimeResolution(),
+            curr.closeTime() + 1s);
+    }
+
     /** Determine the number of distinct branches for the set of ledgers.
 
         Ledgers A and B are on different branches if A != B, A is not an ancestor
