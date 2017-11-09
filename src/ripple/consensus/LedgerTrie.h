@@ -73,21 +73,20 @@ class LedgerTrie
     class Span
     {
         // The span is the half-open interval [start,end) of chain_
-        Seq start_;
-        Seq end_;
+        Seq start_{0};
+        Seq end_{1};
         LedgerChain chain_;
     public:
-        Span(LedgerChain s)
+        Span() = default;
+        Span(LedgerChain chain)
             : start_{0}
-            , end_{chain_.seq() + Seq{1}}
-            , chain_{std::move(s)}
+            , end_{chain.seq() + Seq{1}}
+            , chain_{std::move(chain)}
         {
 
         }
 
-        Span() : start_{0}, end_{0}, chain_{}
-        {
-        }
+
 
         Span(Span const & s) = default;
         Span(Span && s) = default;
@@ -120,16 +119,17 @@ class LedgerTrie
             return start_ == end_;
         }
 
+        ID
+        lastID() const
+        {
+            return chain_[end_ - Seq{1}].value_or(ID{0});
+        }
+
         // Return the ID of the ledger that starts this span
         ID
         startID() const
         {
-            if(empty())
-                return ID{0};
-            boost::optional<ID> res = chain_[start_];
-            if(res)
-                return *res;
-            return ID{0};
+            return chain_[start_].value_or(ID{0});
         }
 
         // Return the ledger sequence number of the first difference between
@@ -137,9 +137,6 @@ class LedgerTrie
         Seq
         diff(LedgerChain const & o) const
         {
-            if(empty())
-                return start_;
-
             return mismatch(chain_, o, start_, end_);
         }
 
@@ -295,16 +292,16 @@ public:
     insert(LedgerChain const & ledgerChain)
     {
         Node* loc;
-        Seq pos;
-        std::tie(loc, pos) = find(ledgerChain);
+        Seq diffSeq;
+        std::tie(loc, diffSeq) = find(ledgerChain);
 
         // There is always a place to insert
         assert(loc);
 
-        Span sTmp{ledgerChain};
-        Span prefix = sTmp.before(pos);
-        Span oldSuffix = loc->span.from(pos);
-        Span newSuffix = sTmp.from(pos);
+        Span lTmp{ledgerChain};
+        Span prefix = lTmp.before(diffSeq);
+        Span oldSuffix = loc->span.from(diffSeq);
+        Span newSuffix = lTmp.from(diffSeq);
         Node* incNode = loc;
 
         if (!oldSuffix.empty())
@@ -356,14 +353,14 @@ public:
     remove(LedgerChain const & ledgerChain)
     {
         Node* loc;
-        Seq pos;
-        std::tie(loc, pos) = find(ledgerChain);
+        Seq diffSeq;
+        std::tie(loc, diffSeq) = find(ledgerChain);
 
         // Cannot remove root
         if (loc && loc != root.get())
         {
             // Must be exact match with tip support
-            if (pos == loc->span.end() && pos > ledgerChain.seq() &&
+            if (diffSeq == loc->span.end() && diffSeq > ledgerChain.seq() &&
                 loc->tipSupport > 0)
             {
                 loc->tipSupport--;
@@ -407,11 +404,11 @@ public:
     tipSupport(LedgerChain const& ledgerChain) const
     {
         Node const* loc;
-        Seq pos;
-        std::tie(loc, pos) = find(ledgerChain);
+        Seq diffSeq;
+        std::tie(loc, diffSeq) = find(ledgerChain);
 
         // Exact match
-        if (loc && pos == loc->span.end() && pos > ledgerChain.seq())
+        if (loc && diffSeq == loc->span.end() && diffSeq > ledgerChain.seq())
             return loc->tipSupport;
         return 0;
     }
@@ -422,12 +419,16 @@ public:
     branchSupport(LedgerChain const & ledgerChain) const
     {
         Node const * loc;
-        Seq pos;
-        std::tie(loc,pos) = find(ledgerChain);
+        Seq diffSeq;
+        std::tie(loc,diffSeq) = find(ledgerChain);
 
-        // Prefix or exact match
-        if (loc && pos <= ledgerChain.seq() && s.seq() < loc->span.end())
+        // Check that ledgerChain is is an exact match or proper
+        // prefix of loc
+        if (loc && diffSeq > ledgerChain.seq() &&
+            ledgerChain.seq() < loc->span.end())
+        {
             return loc->branchSupport;
+        }
         return 0;
     }
 
@@ -497,7 +498,7 @@ public:
             else // current is the best
                 done = true;
         }
-        return curr->span.id();
+        return curr->span.lastID();
     }
 
 
