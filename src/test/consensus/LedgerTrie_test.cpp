@@ -16,11 +16,33 @@
     OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 //==============================================================================
+#include <BeastConfig.h>
+#include <ripple/beast/unit_test.h>
+#include <ripple/consensus/LedgerTrie.h>
+#include <test/csf/ledgers.h>
 
-#include <test/consensus/ByzantineFailureSim_test.cpp>
-#include <test/consensus/Consensus_test.cpp>
-#include <test/consensus/DistributedValidatorsSim_test.cpp>
-#include <test/consensus/LedgerTiming_test.cpp>
-#include <test/consensus/LedgerTrie_test.cpp>
-#include <test/consensus/ScaleFreeSim_test.cpp>
-#include <test/consensus/Validations_test.cpp>
+namespace ripple {
+namespace test {
+
+class LedgerTrie_test : public beast::unit_test::suite
+{
+    beast::Journal j;
+
+    void
+    run() override
+    {
+        using namespace csf;
+
+        LedgerTrie<Ledger> t;
+        LedgerOracle  oracle;
+
+        Ledger genesis;
+
+        t.insert(genesis);
+
+    }
+};
+
+BEAST_DEFINE_TESTSUITE(LedgerTrie, consensus, ripple);
+}  // namespace test
+}  // namespace ripple
