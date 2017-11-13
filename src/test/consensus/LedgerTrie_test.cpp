@@ -400,6 +400,25 @@ class LedgerTrie_test : public beast::unit_test::suite
             t.insert(h["abcde"]);
             BEAST_EXPECT(t.getPreferred() == h["abcde"].id());
         }
+
+        // Too much prefix support
+        {
+            LedgerTrie<Ledger> t;
+            Helper h;
+            t.insert(h["abc"]);
+            t.insert(h["abcde"]);
+            t.insert(h["abcde"]);
+            t.insert(h["abcfg"]);
+            t.insert(h["abcfg"]);
+            // 'de' and 'fg' are tied without 'abc' vote
+            BEAST_EXPECT(t.getPreferred() == h["abc"].id());
+            t.remove(h["abc"]);
+            t.insert(h["abcd"]);
+            // 'de' branch has 3 votes to 2, but not enough suport for 'e'
+            // since the node on 'd' and the 2 on 'fg' could go in a
+            // different direction
+            BEAST_EXPECT(t.getPreferred() == h["abcd"].id());
+        }
     }
 
     void

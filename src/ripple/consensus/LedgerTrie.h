@@ -53,13 +53,33 @@ namespace ripple {
     This is analagous to the merkle tree property in which a nodes hash is
     the hash of the concatenation of its child node hashes.
 
+    The templated LedgerChain type represents a ledger and its unique history.
+    It should be lightweight and cheap to copy.
 
-    LedgerChain type requirements
+       struct LedgerChain
+       {
+         // The default chain is a special chain representing the genesis ledger.
+         LedgerChain();
 
-       seq()
-       [seq] -> id
-       mismatch(other, startSeq, endSeq)
+         LedgerChain(LedgerChain &);
+         LedgerChain& operator=(LedgerChain );
 
+          // Return the sequence number of the Ledger at the tip of this chain
+          Seq seq() const;
+
+          // Return the ID of the ancestor ledger at the given sequence number
+          // Returns boost::none if it is unknown
+          ID
+          operator[](Seq s) -> boost::optional<ID>
+
+       };
+
+       // Return the sequence number of the first mismatching ledger
+       // of the chains in the half-open interval [startSeq, endSeq)
+       Seq
+       mismatch(chainA, chainB, startSeq, endSeq);
+
+    Note that
     @tparam LedgerChain A type representing a specific history of ledgers
 */
 template <class LedgerChain>
@@ -436,8 +456,9 @@ public:
 
         The preferred ledger is found by walking the ledger trie, choosing the
         child with the most branch support and continuing as long as any
-        ancestral tip support *can not* change which child has the most branch
-        support. Ties between siblings are broken using the highest ledger ID.
+        change in minority support *can not* change which child has the
+        most branch support. Ties between siblings are broken using the highest
+        ledger ID.
     */
     ID
     getPreferred()
@@ -486,7 +507,30 @@ public:
 
             if (best && ((margin > prefixSupport) || (prefixSupport == 0)))
             {
-                prefixSupport += best->tipSupport;
+                // Prefix support is all the support not on the branch we
+                // are moving to
+                //       curr
+                //     /  |  \
+                //    A   B  best
+                // At curr, the prefix support already includes the tip support
+                // of curr and its ancestors, along with the branch support of
+                // any of its siblings that are inconsistent.
+                //
+                // The additional prefix suppport that is carried to best is
+                //   A->branchSupport + B->branchSupport + best->tipSupport
+                // This is the number of branches that have not yet voted
+                // on a descendent of best, or have voted on a conflicting
+                // descendent.
+                //
+                // But
+                //     A->branchSupport+B->branchSupport
+                //               =  curr->branchSupport - best->branchSupport
+                //                                      - curr->tipSupport
+                //
+                // This will not overflow by definition of the above quantities
+                prefixSupport += (curr->branchSupport - best->branchSupport
+                                 - curr->tipSupport) + best->tipSupport;
+
                 curr = best;
             }
             else  // current is the best
