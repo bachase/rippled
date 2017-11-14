@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <memory>
 #include <vector>
+#include <ripple/json/json_value.h>
 
 namespace ripple {
 
@@ -136,12 +137,6 @@ class LedgerTrie
             return start_ == end_;
         }
 
-        ID
-        lastID() const
-        {
-            return chain_[end_ - Seq{1}].value_or(ID{0});
-        }
-
         // Return the ID of the ledger that starts this span
         ID
         startID() const
@@ -155,6 +150,16 @@ class LedgerTrie
         diff(LedgerChain const& o) const
         {
             return mismatch(chain_, o, start_, end_);
+        }
+
+        std::pair<Seq, ID>
+        tip() const
+        {
+            Seq tipSeq{end_ -Seq{1}};
+            boost::optional<ID> mID = chain_[tipSeq];
+            if(mID)
+                return {tipSeq, *mID};
+            return {Seq{0}, ID{0}};
         }
 
     private:
@@ -178,7 +183,7 @@ class LedgerTrie
         friend std::ostream&
         operator<<(std::ostream& o, Span const& s)
         {
-            return o << s.chain_.lastID();
+            return o << s.chain_[s.end_ - Seq{1}].value_or(ID{0});
         }
 
         friend Span
@@ -232,6 +237,25 @@ class LedgerTrie
         {
             return o << s.span << "(T:" << s.tipSupport
                      << ",B:" << s.branchSupport << ")";
+        }
+
+        Json::Value
+        getJson() const
+        {
+            Json::Value res;
+            res["id"] = to_string(span.tip().second);
+            res["seq"] = static_cast<std::uint32_t>(span.tip().first);
+            res["tipSupport"] = tipSupport;
+            res["branchSupport"] = branchSupport;
+            if(!children.empty())
+            {
+                Json::Value &cs = (res["children"] = Json::arrayValue);
+                for(auto const & child : children)
+                {
+                    cs.append(child->getJson());
+                }
+            }
+            return res;
         }
     };
 
@@ -460,7 +484,7 @@ public:
         most branch support. Ties between siblings are broken using the highest
         ledger ID.
     */
-    ID
+    std::pair<Seq,ID>
     getPreferred()
     {
         Node* curr = root.get();
@@ -536,7 +560,7 @@ public:
             else  // current is the best
                 done = true;
         }
-        return curr->span.lastID();
+        return curr->span.tip();
     }
 
     /** Dump an ascii representation of the trie to the stream
@@ -545,6 +569,14 @@ public:
     dump(std::ostream& o) const
     {
         dumpImpl(o, root, 0);
+    }
+
+    /** Dump JON representation of trie state
+    */
+    Json::Value
+    getJson() const
+    {
+        return root->getJson();
     }
 
     /** Check the compressed trie and support invariants.
