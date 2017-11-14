@@ -304,14 +304,14 @@ class LedgerTrie_test : public beast::unit_test::suite
         {
             LedgerTrie<Ledger> t;
             Helper h;
-            BEAST_EXPECT(t.getPreferred() == Ledger::ID{0});
+            BEAST_EXPECT(t.getPreferred().second == Ledger::ID{0});
         }
         // Single node no children
         {
             LedgerTrie<Ledger> t;
             Helper h;
             t.insert(h["abc"]);
-            BEAST_EXPECT(t.getPreferred() == h["abc"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
         }
         // Single node smaller child support
         {
@@ -319,10 +319,10 @@ class LedgerTrie_test : public beast::unit_test::suite
             Helper h;
             t.insert(h["abc"]);
             t.insert(h["abcd"]);
-            BEAST_EXPECT(t.getPreferred() == h["abc"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
 
             t.insert(h["abc"]);
-            BEAST_EXPECT(t.getPreferred() == h["abc"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
         }
         // Single node larger child
         {
@@ -331,7 +331,7 @@ class LedgerTrie_test : public beast::unit_test::suite
             t.insert(h["abc"]);
             t.insert(h["abcd"]);
             t.insert(h["abcd"]);
-            BEAST_EXPECT(t.getPreferred() == h["abcd"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abcd"].id());
         }
         // Single node smaller children support
         {
@@ -340,10 +340,10 @@ class LedgerTrie_test : public beast::unit_test::suite
             t.insert(h["abc"]);
             t.insert(h["abcd"]);
             t.insert(h["abce"]);
-            BEAST_EXPECT(t.getPreferred() == h["abc"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
 
             t.insert(h["abc"]);
-            BEAST_EXPECT(t.getPreferred() == h["abc"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
         }
         // Single node larger children
         {
@@ -353,9 +353,9 @@ class LedgerTrie_test : public beast::unit_test::suite
             t.insert(h["abcd"]);
             t.insert(h["abcd"]);
             t.insert(h["abce"]);
-            BEAST_EXPECT(t.getPreferred() == h["abc"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
             t.insert(h["abcd"]);
-            BEAST_EXPECT(t.getPreferred() == h["abcd"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abcd"].id());
         }
         // Tie-breaker
         {
@@ -365,10 +365,10 @@ class LedgerTrie_test : public beast::unit_test::suite
             t.insert(h["abcd"]);
             t.insert(h["abce"]);
             t.insert(h["abce"]);
-            BEAST_EXPECT(t.getPreferred() == h["abce"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abce"].id());
 
             t.insert(h["abcd"]);
-            BEAST_EXPECT(t.getPreferred() == h["abcd"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abcd"].id());
         }
 
         // Tie-breaker not needed
@@ -380,11 +380,11 @@ class LedgerTrie_test : public beast::unit_test::suite
             t.insert(h["abce"]);
             t.insert(h["abce"]);
             // abce only has a margin of 1, but it owns the tie-breaker
-            BEAST_EXPECT(t.getPreferred() == h["abce"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abce"].id());
 
             t.remove(h["abc"]);
             t.insert(h["abcd"]);
-            BEAST_EXPECT(t.getPreferred() == h["abce"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abce"].id());
         }
 
         // Single node larger grand child
@@ -398,10 +398,10 @@ class LedgerTrie_test : public beast::unit_test::suite
             t.insert(h["abcde"]);
             t.insert(h["abcde"]);
             t.insert(h["abcde"]);
-            BEAST_EXPECT(t.getPreferred() == h["abcde"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abcde"].id());
         }
 
-        // Too much prefix support
+        // Too much prefix support from competing branches
         {
             LedgerTrie<Ledger> t;
             Helper h;
@@ -411,13 +411,13 @@ class LedgerTrie_test : public beast::unit_test::suite
             t.insert(h["abcfg"]);
             t.insert(h["abcfg"]);
             // 'de' and 'fg' are tied without 'abc' vote
-            BEAST_EXPECT(t.getPreferred() == h["abc"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
             t.remove(h["abc"]);
             t.insert(h["abcd"]);
             // 'de' branch has 3 votes to 2, but not enough suport for 'e'
             // since the node on 'd' and the 2 on 'fg' could go in a
             // different direction
-            BEAST_EXPECT(t.getPreferred() == h["abcd"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abcd"].id());
         }
     }
 
