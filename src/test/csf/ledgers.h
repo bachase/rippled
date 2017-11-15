@@ -200,7 +200,7 @@ public:
 
     /** Return the id of the ancestor with the given seq (if exists/known)
      */
-    boost::optional<ID>
+    ID
     operator[](Seq seq) const;
 
     /** Return the sequence number of the first mismatching ancestor in the half

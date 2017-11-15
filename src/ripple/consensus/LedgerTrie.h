@@ -33,9 +33,9 @@ namespace ripple {
     validation support of recent ledgers based on their ancestry.
 
     The compressed trie structure comes from recognizing that ledger history
-    can be viewed as a string over the alphabet of ledger hashes. That is,
+    can be viewed as a string over the alphabet of ledger ids. That is,
     a given ledger with sequence number `seq` defines a length `seq` string,
-    with i-th entry equal to the hash of the ancestor ledger with sequence
+    with i-th entry equal to the id of the ancestor ledger with sequence
     number i. "Sequence" strings with a common prefix share those ancestor
     ledgers in common. Tracking this ancestry information and relations across
     all validated ledgers is done conveniently in a compressed trie. A node in
@@ -51,27 +51,30 @@ namespace ripple {
     the branch support of that node's children:
         node->branchSupport = node->tipSupport
                             + sum_(child : node->children) child->branchSupport
-    This is analagous to the merkle tree property in which a nodes hash is
+    This is analagous to the merkle tree property in which a node's hash is
     the hash of the concatenation of its child node hashes.
 
     The templated LedgerChain type represents a ledger and its unique history.
     It should be lightweight and cheap to copy.
 
+       // Identifier types that should be equality-comparable and copyable
+       struct ID;
+       struct Seq;
+
        struct LedgerChain
        {
-         // The default chain is a special chain representing the genesis ledger.
-         LedgerChain();
+          // The default chain is a special chain representing the genesis ledger.
+          LedgerChain();
 
-         LedgerChain(LedgerChain &);
-         LedgerChain& operator=(LedgerChain );
+          LedgerChain(LedgerChain &);
+          LedgerChain& operator=(LedgerChain );
 
           // Return the sequence number of the Ledger at the tip of this chain
           Seq seq() const;
 
-          // Return the ID of the ancestor ledger at the given sequence number
-          // Returns boost::none if it is unknown
+          // Return the ID of the ancestor with given sequence number
           ID
-          operator[](Seq s) -> boost::optional<ID>
+          operator[](Seq s);
 
        };
 
@@ -80,7 +83,16 @@ namespace ripple {
        Seq
        mismatch(chainA, chainB, startSeq, endSeq);
 
-    Note that
+    The unique history invariant of ledgers requires that any two ledger
+    chain instances that have the same ID for a given sequence number
+    must agree on the IDs for all earlier sequence numbers:
+
+        LedgerChain a,b;
+        // For all Seq s:
+        if(a[s] == b[s]);
+            for(Seq p = 0; p < s; ++p)
+                assert(a[p] == b[p]);
+
     @tparam LedgerChain A type representing a specific history of ledgers
 */
 template <class LedgerChain>
@@ -137,11 +149,11 @@ class LedgerTrie
             return start_ == end_;
         }
 
-        // Return the ID of the ledger that starts this span
+        //Return the ID of the ledger that starts this span
         ID
         startID() const
         {
-            return chain_[start_].value_or(ID{0});
+            return chain_[start_];
         }
 
         // Return the ledger sequence number of the first difference between
@@ -156,10 +168,7 @@ class LedgerTrie
         tip() const
         {
             Seq tipSeq{end_ -Seq{1}};
-            boost::optional<ID> mID = chain_[tipSeq];
-            if(mID)
-                return {tipSeq, *mID};
-            return {Seq{0}, ID{0}};
+            return {tipSeq, chain_[tipSeq]};
         }
 
     private:
@@ -183,11 +192,12 @@ class LedgerTrie
         friend std::ostream&
         operator<<(std::ostream& o, Span const& s)
         {
-            return o << s.chain_[s.end_ - Seq{1}].value_or(ID{0});
+            return o << s.tip().second << "(" << s.start_ << "," << s.end_
+                     << "]";
         }
 
         friend Span
-        combine(Span const& a, Span const& b)
+        merge(Span const& a, Span const& b)
         {
             // Return combined span, using chain_ from higher sequence span
             if (a.end_ < b.end_)
@@ -274,7 +284,7 @@ class LedgerTrie
     {
         Node* curr = root.get();
 
-        // Root is always defined and is a prefix of all strings
+        // Root is always defined and is in common with all chains
         assert(curr);
         Seq pos = curr->span.diff(ledgerChain);
 
@@ -285,8 +295,7 @@ class LedgerTrie
         while (!done && pos == curr->span.end())
         {
             done = true;
-            // All children spans are disjoint, so we continue if a child
-            // has a longer match
+            // Find the child with the longest ancestry match
             for (std::unique_ptr<Node> const& child : curr->children)
             {
                 auto childPos = child->span.diff(ledgerChain);
@@ -325,9 +334,12 @@ public:
     }
 
     /** Insert and increment the support for the given ledger chain.
+
+        @param ledgerChain A ledger and its ancestry
+        @param count The count of support for this ledger
      */
     void
-    insert(LedgerChain const& ledgerChain)
+    insert(LedgerChain const& ledgerChain, std::uint32_t count = 1)
     {
         Node* loc;
         Seq diffSeq;
@@ -375,20 +387,23 @@ public:
             loc->children.push_back(std::move(newNode));
         }
 
-        incNode->tipSupport++;
+        incNode->tipSupport += count;
         while (incNode)
         {
-            ++incNode->branchSupport;
+            incNode->branchSupport += count;
             incNode = incNode->parent;
         }
     }
 
     /** Decrease tip support for a ledger chain, compressing if possible.
 
+        @param ledgerChain The ledger history to remove
+        @param count The amount of tip support to remove
+
         @return Whether a node was erased as a result
     */
     bool
-    remove(LedgerChain const& ledgerChain)
+    remove(LedgerChain const& ledgerChain, std::uint32_t count = 1)
     {
         Node* loc;
         Seq diffSeq;
@@ -401,12 +416,13 @@ public:
             if (diffSeq == loc->span.end() && diffSeq > ledgerChain.seq() &&
                 loc->tipSupport > 0)
             {
-                loc->tipSupport--;
+                count = std::min(count, loc->tipSupport);
+                loc->tipSupport -= count;
 
                 Node* decNode = loc;
                 while (decNode)
                 {
-                    --decNode->branchSupport;
+                    decNode->branchSupport -= count;
                     decNode = decNode->parent;
                 }
 
@@ -427,7 +443,7 @@ public:
                         std::swap(loc->children, child->children);
                         loc->tipSupport = child->tipSupport;
                         loc->branchSupport = child->branchSupport;
-                        loc->span = combine(loc->span, child->span);
+                        loc->span = merge(loc->span, child->span);
                     }
                 }
                 return true;
@@ -493,7 +509,7 @@ public:
         std::uint32_t prefixSupport = curr->tipSupport;
         while (curr && !done)
         {
-            // If the best child has margin exceeding the prefix  support
+            // If the best child has margin exceeding the prefix support
             // continue from that child, otherwise we are done
 
             Node* best = nullptr;
@@ -507,7 +523,7 @@ public:
             else if (!curr->children.empty())
             {
                 // Sort placing children with largest branch support in the
-                // front, breaking ties with the span's ledger ID
+                // front, breaking ties with the span's starting ID then tip
                 std::partial_sort(
                     curr->children.begin(),
                     curr->children.begin() + 2,
@@ -522,7 +538,7 @@ public:
                 margin = curr->children[0]->branchSupport -
                     curr->children[1]->branchSupport;
 
-                // If best holds the tie-breaker, it has a one larger margin
+                // If best holds the tie-breaker, gets one larger margin
                 // since the second best needs additional branchSupport
                 // to overcome the tie
                 if (best->span.startID() > curr->children[1]->span.startID())
@@ -542,11 +558,12 @@ public:
                 //
                 // The additional prefix suppport that is carried to best is
                 //   A->branchSupport + B->branchSupport + best->tipSupport
-                // This is the number of branches that have not yet voted
-                // on a descendent of best, or have voted on a conflicting
-                // descendent.
+                // This is the amount of support that has not yet voted
+                // on a descendent of best, or has voted on a conflicting
+                // descendent and will switch to best in the future. This means
+                // that they may support an arbitrary descendent of best.
                 //
-                // But
+                // The calculation is implified using
                 //     A->branchSupport+B->branchSupport
                 //               =  curr->branchSupport - best->branchSupport
                 //                                      - curr->tipSupport
