@@ -162,6 +162,26 @@ class LedgerTrie_test : public beast::unit_test::suite
             BEAST_EXPECT(t.tipSupport(h["abcde"]) == 1);
             BEAST_EXPECT(t.branchSupport(h["abcde"]) == 1);
         }
+
+        // Multiple
+        {
+            LedgerTrie<Ledger> t;
+            Helper h;
+            t.insert(h["ab"],4);
+            BEAST_EXPECT(t.tipSupport(h["ab"]) == 4);
+            BEAST_EXPECT(t.branchSupport(h["ab"]) == 4);
+            BEAST_EXPECT(t.tipSupport(h["a"]) == 0);
+            BEAST_EXPECT(t.branchSupport(h["a"]) == 4);
+
+            t.insert(h["abc"],2);
+            BEAST_EXPECT(t.tipSupport(h["abc"]) == 2);
+            BEAST_EXPECT(t.branchSupport(h["abc"]) == 2);
+            BEAST_EXPECT(t.tipSupport(h["ab"]) == 4);
+            BEAST_EXPECT(t.branchSupport(h["ab"]) == 6);
+            BEAST_EXPECT(t.tipSupport(h["a"]) == 0);
+            BEAST_EXPECT(t.branchSupport(h["a"]) == 6);
+
+        }
     }
 
     void
@@ -197,13 +217,25 @@ class LedgerTrie_test : public beast::unit_test::suite
         {
             LedgerTrie<Ledger> t;
             Helper h;
-            t.insert(h["abc"]);
-            t.insert(h["abc"]);
+            t.insert(h["abc"],2);
 
             BEAST_EXPECT(t.tipSupport(h["abc"]) == 2);
             BEAST_EXPECT(t.remove(h["abc"]));
             BEAST_EXPECT(t.checkInvariants());
             BEAST_EXPECT(t.tipSupport(h["abc"]) == 1);
+
+            t.insert(h["abc"], 1);
+            BEAST_EXPECT(t.tipSupport(h["abc"]) == 2);
+            BEAST_EXPECT(t.remove(h["abc"], 2));
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.tipSupport(h["abc"]) == 0);
+
+            t.insert(h["abc"], 3);
+            BEAST_EXPECT(t.tipSupport(h["abc"]) == 3);
+            BEAST_EXPECT(t.remove(h["abc"], 300));
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.tipSupport(h["abc"]) == 0);
+
         }
         // In trie with = 1 tip support, no children
         {
@@ -329,8 +361,7 @@ class LedgerTrie_test : public beast::unit_test::suite
             LedgerTrie<Ledger> t;
             Helper h;
             t.insert(h["abc"]);
-            t.insert(h["abcd"]);
-            t.insert(h["abcd"]);
+            t.insert(h["abcd"],2);
             BEAST_EXPECT(t.getPreferred().second == h["abcd"].id());
         }
         // Single node smaller children support
@@ -350,24 +381,24 @@ class LedgerTrie_test : public beast::unit_test::suite
             LedgerTrie<Ledger> t;
             Helper h;
             t.insert(h["abc"]);
-            t.insert(h["abcd"]);
-            t.insert(h["abcd"]);
+            t.insert(h["abcd"],2);
             t.insert(h["abce"]);
             BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
             t.insert(h["abcd"]);
             BEAST_EXPECT(t.getPreferred().second == h["abcd"].id());
         }
-        // Tie-breaker
+        // Tie-breaker by id
         {
             LedgerTrie<Ledger> t;
             Helper h;
-            t.insert(h["abcd"]);
-            t.insert(h["abcd"]);
-            t.insert(h["abce"]);
-            t.insert(h["abce"]);
+            t.insert(h["abcd"],2);
+            t.insert(h["abce"],2);
+
+            BEAST_EXPECT(h["abce"].id() > h["abcd"].id());
             BEAST_EXPECT(t.getPreferred().second == h["abce"].id());
 
             t.insert(h["abcd"]);
+            BEAST_EXPECT(h["abce"].id() > h["abcd"].id());
             BEAST_EXPECT(t.getPreferred().second == h["abcd"].id());
         }
 
@@ -377,14 +408,15 @@ class LedgerTrie_test : public beast::unit_test::suite
             Helper h;
             t.insert(h["abc"]);
             t.insert(h["abcd"]);
-            t.insert(h["abce"]);
-            t.insert(h["abce"]);
+            t.insert(h["abce"],2);
             // abce only has a margin of 1, but it owns the tie-breaker
+            BEAST_EXPECT(h["abce"].id() > h["abcd"].id());
             BEAST_EXPECT(t.getPreferred().second == h["abce"].id());
 
-            t.remove(h["abc"]);
+            // Switch support from abce to abcd, tie-breaker now needed
+            t.remove(h["abce"]);
             t.insert(h["abcd"]);
-            BEAST_EXPECT(t.getPreferred().second == h["abce"].id());
+            BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
         }
 
         // Single node larger grand child
@@ -392,12 +424,8 @@ class LedgerTrie_test : public beast::unit_test::suite
             LedgerTrie<Ledger> t;
             Helper h;
             t.insert(h["abc"]);
-            t.insert(h["abcd"]);
-            t.insert(h["abcd"]);
-            t.insert(h["abcde"]);
-            t.insert(h["abcde"]);
-            t.insert(h["abcde"]);
-            t.insert(h["abcde"]);
+            t.insert(h["abcd"],2);
+            t.insert(h["abcde"],4);
             BEAST_EXPECT(t.getPreferred().second == h["abcde"].id());
         }
 
@@ -406,10 +434,8 @@ class LedgerTrie_test : public beast::unit_test::suite
             LedgerTrie<Ledger> t;
             Helper h;
             t.insert(h["abc"]);
-            t.insert(h["abcde"]);
-            t.insert(h["abcde"]);
-            t.insert(h["abcfg"]);
-            t.insert(h["abcfg"]);
+            t.insert(h["abcde"],2);
+            t.insert(h["abcfg"],2);
             // 'de' and 'fg' are tied without 'abc' vote
             BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
             t.remove(h["abc"]);

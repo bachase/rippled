@@ -45,7 +45,7 @@ Ledger::isAncestor(Ledger const& ancestor) const
     return false;
 }
 
-boost::optional<Ledger::ID>
+Ledger::ID
 Ledger::operator[](Seq s) const
 {
     if(s > seq())
