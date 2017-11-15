@@ -54,65 +54,69 @@ namespace ripple {
     This is analagous to the merkle tree property in which a node's hash is
     the hash of the concatenation of its child node hashes.
 
-    The templated LedgerChain type represents a ledger and its unique history.
+    The templated Ledger type represents a ledger which has a unique history.
     It should be lightweight and cheap to copy.
 
+       @code
        // Identifier types that should be equality-comparable and copyable
        struct ID;
        struct Seq;
 
-       struct LedgerChain
+       struct Ledger
        {
-          // The default chain is a special chain representing the genesis ledger.
-          LedgerChain();
+          // The default ledger represents a ledger that prefixes all other ledgers
+          // (aka the genesis ledger)
+          Ledger();
 
-          LedgerChain(LedgerChain &);
-          LedgerChain& operator=(LedgerChain );
+          Ledger(Ledger &);
+          Ledger& operator=(Ledger );
 
-          // Return the sequence number of the Ledger at the tip of this chain
+          // Return the sequence number of this ledger
           Seq seq() const;
 
-          // Return the ID of the ancestor with given sequence number
+          // Return the ID of this ledger's ancestor with given sequence number
           ID
           operator[](Seq s);
 
        };
 
-       // Return the sequence number of the first mismatching ledger
-       // of the chains in the half-open interval [startSeq, endSeq)
+       // Return the sequence number of the first mismatching ancestor
+       // of the ledgers in the half-open interval [startSeq, endSeq)
        Seq
-       mismatch(chainA, chainB, startSeq, endSeq);
+       mismatch(ledgerA, ledgerB, startSeq, endSeq);
+       @endcode
 
-    The unique history invariant of ledgers requires that any two ledger
-    chain instances that have the same ID for a given sequence number
-    must agree on the IDs for all earlier sequence numbers:
+    The unique history invariant of ledgers requires any ledgers that agree
+    on the id of a given sequence number agree on ALL ancestors before that ledger
 
-        LedgerChain a,b;
+        @code
+        Ledger a,b;
         // For all Seq s:
         if(a[s] == b[s]);
             for(Seq p = 0; p < s; ++p)
                 assert(a[p] == b[p]);
+        @endcode
 
-    @tparam LedgerChain A type representing a specific history of ledgers
+    @tparam Ledger A type representing a specific history of ledgers
 */
-template <class LedgerChain>
+template <class Ledger>
 class LedgerTrie
 {
-    using Seq = typename LedgerChain::Seq;
-    using ID = typename LedgerChain::ID;
+    using Seq = typename Ledger::Seq;
+    using ID = typename Ledger::ID;
 
-    // Span of a ledger chain
+    // Span of a ledger
     class Span
     {
-        // The span is the half-open interval [start,end) of chain_
+        // The span is the half-open interval [start,end) of ledger_
         Seq start_{0};
         Seq end_{1};
-        LedgerChain chain_;
+        Ledger ledger_;
 
     public:
         Span() = default;
-        Span(LedgerChain chain)
-            : start_{0}, end_{chain.seq() + Seq{1}}, chain_{std::move(chain)}
+        Span(Ledger ledger)
+            : start_{0}, end_{ledger.seq() + Seq{1}}, ledger_{std::move(ledger)}
         {
         }
 
@@ -153,27 +157,27 @@ class LedgerTrie
         ID
         startID() const
         {
-            return chain_[start_];
+            return ledger_[start_];
         }
 
         // Return the ledger sequence number of the first difference between
-        // this span and a given chain.
+        // this span and a given ledger.
         Seq
-        diff(LedgerChain const& o) const
+        diff(Ledger const& o) const
         {
-            return mismatch(chain_, o, start_, end_);
+            return mismatch(ledger_, o, start_, end_);
         }
 
         std::pair<Seq, ID>
         tip() const
         {
             Seq tipSeq{end_ -Seq{1}};
-            return {tipSeq, chain_[tipSeq]};
+            return {tipSeq, ledger_[tipSeq]};
         }
 
     private:
-        Span(Seq start, Seq end, LedgerChain const& l)
-            : start_{start}, end_{end}, chain_{l}
+        Span(Seq start, Seq end, Ledger const& l)
+            : start_{start}, end_{end}, ledger_{l}
         {
             assert(start <= end);
         }
@@ -186,7 +190,7 @@ class LedgerTrie
                 return std::min(std::max(start_, val), end_);
             };
 
-            return Span(clamp(from), clamp(to), chain_);
+            return Span(clamp(from), clamp(to), ledger_);
         }
 
         friend std::ostream&
@@ -199,11 +203,11 @@ class LedgerTrie
         friend Span
         merge(Span const& a, Span const& b)
         {
-            // Return combined span, using chain_ from higher sequence span
+            // Return combined span, using ledger_ from higher sequence span
             if (a.end_ < b.end_)
-                return Span(std::min(a.start_, b.start_), b.end_, b.chain_);
+                return Span(std::min(a.start_, b.start_), b.end_, b.ledger_);
 
-            return Span(std::min(a.start_, b.start_), a.end_, a.chain_);
+            return Span(std::min(a.start_, b.start_), a.end_, a.ledger_);
         }
     };
 
@@ -214,7 +218,7 @@ class LedgerTrie
         {
         }
 
-        Node(LedgerChain const& l) : span{l}, tipSupport{1}, branchSupport{1}
+        Node(Ledger const& l) : span{l}, tipSupport{1}, branchSupport{1}
         {
         }
 
@@ -274,19 +278,19 @@ class LedgerTrie
     std::unique_ptr<Node> root;
 
     /** Find the node in the trie that represents the longest common ancetry
-        with the given ledger chain.
+        with the given ledger.
 
         @return Pair of the found node and the sequence number of the first
                 ledger difference.
     */
     std::pair<Node*, Seq>
-    find(LedgerChain const& ledgerChain) const
+    find(Ledger const& ledger) const
     {
         Node* curr = root.get();
 
-        // Root is always defined and is in common with all chains
+        // Root is always defined and is in common with all ledgers
         assert(curr);
-        Seq pos = curr->span.diff(ledgerChain);
+        Seq pos = curr->span.diff(ledger);
 
         bool done = false;
 
@@ -298,7 +302,7 @@ class LedgerTrie
             // Find the child with the longest ancestry match
             for (std::unique_ptr<Node> const& child : curr->children)
             {
-                auto childPos = child->span.diff(ledgerChain);
+                auto childPos = child->span.diff(ledger);
                 if (childPos > pos)
                 {
                     done = false;
@@ -333,22 +337,22 @@ public:
     {
     }
 
-    /** Insert and increment the support for the given ledger chain.
+    /** Insert and increment the support for the given ledger.
 
-        @param ledgerChain A ledger and its ancestry
+        @param ledger A ledger and its ancestry
         @param count The count of support for this ledger
      */
     void
-    insert(LedgerChain const& ledgerChain, std::uint32_t count = 1)
+    insert(Ledger const& ledger, std::uint32_t count = 1)
     {
         Node* loc;
         Seq diffSeq;
-        std::tie(loc, diffSeq) = find(ledgerChain);
+        std::tie(loc, diffSeq) = find(ledger);
 
         // There is always a place to insert
         assert(loc);
 
-        Span lTmp{ledgerChain};
+        Span lTmp{ledger};
         Span prefix = lTmp.before(diffSeq);
         Span oldSuffix = loc->span.from(diffSeq);
         Span newSuffix = lTmp.from(diffSeq);
@@ -395,25 +399,25 @@ public:
         }
     }
 
-    /** Decrease tip support for a ledger chain, compressing if possible.
+    /** Decrease tip support for a ledger, compressing if possible.
 
-        @param ledgerChain The ledger history to remove
+        @param ledger The ledger history to remove
         @param count The amount of tip support to remove
 
         @return Whether a node was erased as a result
     */
     bool
-    remove(LedgerChain const& ledgerChain, std::uint32_t count = 1)
+    remove(Ledger const& ledger, std::uint32_t count = 1)
     {
         Node* loc;
         Seq diffSeq;
-        std::tie(loc, diffSeq) = find(ledgerChain);
+        std::tie(loc, diffSeq) = find(ledger);
 
         // Cannot erase root
         if (loc && loc != root.get())
         {
             // Must be exact match with tip support
-            if (diffSeq == loc->span.end() && diffSeq > ledgerChain.seq() &&
+            if (diffSeq == loc->span.end() && diffSeq > ledger.seq() &&
                 loc->tipSupport > 0)
             {
                 count = std::min(count, loc->tipSupport);
@@ -452,34 +456,34 @@ public:
         return false;
     }
 
-    /** Return count of support for the specific ledger chain.
+    /** Return count of support for the specific ledger.
      */
     std::uint32_t
-    tipSupport(LedgerChain const& ledgerChain) const
+    tipSupport(Ledger const& ledger) const
     {
         Node const* loc;
         Seq diffSeq;
-        std::tie(loc, diffSeq) = find(ledgerChain);
+        std::tie(loc, diffSeq) = find(ledger);
 
         // Exact match
-        if (loc && diffSeq == loc->span.end() && diffSeq > ledgerChain.seq())
+        if (loc && diffSeq == loc->span.end() && diffSeq > ledger.seq())
             return loc->tipSupport;
         return 0;
     }
 
-    /** Return the count of branch support for the specific ledger chain
+    /** Return the count of branch support for the specific ledger
      */
     std::uint32_t
-    branchSupport(LedgerChain const& ledgerChain) const
+    branchSupport(Ledger const& ledger) const
     {
         Node const* loc;
         Seq diffSeq;
-        std::tie(loc, diffSeq) = find(ledgerChain);
+        std::tie(loc, diffSeq) = find(ledger);
 
-        // Check that ledgerChain is is an exact match or proper
+        // Check that ledger is is an exact match or proper
         // prefix of loc
-        if (loc && diffSeq > ledgerChain.seq() &&
-            ledgerChain.seq() < loc->span.end())
+        if (loc && diffSeq > ledger.seq() &&
+            ledger.seq() < loc->span.end())
         {
             return loc->branchSupport;
         }
@@ -491,8 +495,8 @@ public:
         The preferred ledger is used to determine the working ledger
         for consensus amongst competing alternatives. In this case, tip
         support represents the count of validators most recently working on
-        a particular ledger chain and branch support is the count of validators
-        working on a chain or one if its descendents.
+        a particular ledger and branch support is the count of validators
+        working on a ledger or one if its descendents.
 
         The preferred ledger is found by walking the ledger trie, choosing the
         child with the most branch support and continuing as long as any
@@ -563,7 +567,7 @@ public:
                 // descendent and will switch to best in the future. This means
                 // that they may support an arbitrary descendent of best.
                 //
-                // The calculation is implified using
+                // The calculation is simplified using
                 //     A->branchSupport+B->branchSupport
                 //               =  curr->branchSupport - best->branchSupport
                 //                                      - curr->tipSupport
