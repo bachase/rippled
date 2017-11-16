@@ -26,6 +26,7 @@
 #include <ripple/beast/container/aged_container_utility.h>
 #include <ripple/beast/container/aged_unordered_map.h>
 #include <ripple/beast/utility/Journal.h>
+#include <ripple/consensus/LedgerTrie.h>
 #include <boost/optional.hpp>
 #include <mutex>
 #include <utility>
@@ -134,6 +135,150 @@ getPreferredLedger(
     return netLgr;
 }
 
+/** Monitors the preferred validation chain.
+
+    Uses the LedgerTrie class to monitor the preferred validation chain. This
+    is based on trusted partial and full validations. It should not be used
+    for determining whether the full validation quorum is reached; only to
+    ask questions about which ledger chains validators are operating on.
+
+    In order to determine ledger history, the Ledger validated is needed to
+    query the ids of its ancestors.
+
+    // TODO: partial
+    // TODO: stale?
+    // TODO: untrusted?
+*/
+template <class Adaptor>
+class Preferred
+{
+    template <typename T>
+
+    using decay_result_t = std::decay_t<std::result_of_t<T>>;
+    using Validation = typename Adaptor::Validation;
+    using Ledger = typename Adaptor::Ledger;
+    using ID = typename Ledger::ID;
+    using Seq = typename Ledger::Seq;
+    using NodeKey = typename Validation::NodeKey;
+
+    Adaptor adaptor_;
+
+    // Represents the ancestry of validated ledgers
+    LedgerTrie<Ledger> trie_;
+
+    // Last validation received from a validator (full or partial)
+    hash_map<NodeKey, Validation> lastValidation_;
+
+    // Last (validated) ledger successfully acquired. If in this map, it is
+    // accounted for in the trie.
+    hash_map<NodeKey, Ledger> lastLedger_;
+
+    // Set of ledgers being acquired from the network
+    hash_map<ID, hash_set<NodeKey>> acquiring_;
+
+    void
+    checkAcquired()
+    {
+        for (auto it = acquiring_.begin(); it != acquiring_.end();)
+        {
+            if (Ledger ledger = adaptor_.acquire(it.first))
+            {
+                for (NodeKey const& key : it.second)
+                    updateTrie(key, ledger);
+
+                it = acquiring_.erase(it);
+            }
+            else
+                ++it;
+        }
+    }
+
+    void
+    updateTrie(NodeKey const & key, Ledger ledger)
+    {
+        assert(val.id() == ledger.id());
+
+        auto const ins = lastLedger_.emplace(key, ledger);
+        if(!ins.second)
+        {
+            trie.remove(ins.first->second);
+            ins.first->second = ledger;
+        }
+        trie.insert(ledger);
+    }
+
+public:
+    /** Process a new validation
+
+        Process a new trusted validation from a validator. This will be
+        reflected only after the validated ledger is succesfully acquired by
+        the local node. In the interim, the prior validated ledger from this
+        node remains.
+
+        @param key The master public key identifying the validating node
+        @param val The trusted validation issued by the node
+    */
+    void
+    update(NodeKey const & key, Validation const & val)
+    {
+        assert(val.isTrusted());
+
+        auto const ins = lastValidation_.emplace(key, val);
+        if(!ins.second)
+        {
+            // Clear any prior acquiring ledger for this node
+            auto it = acquiring_.find(ins.first->second.id());
+            if(it != acquiring_.end())
+                it->second.erase(key);
+            // Set the last validation
+            ins.first->second = val;
+        }
+
+        checkAcquired();
+
+        if(Ledger ledger = adaptor_.acquire(val.id()))
+            updateTrie(key, ledger);
+        else
+            acquiring_[val.id()].insert(key);
+
+    }
+
+    /** Return the ID of the preferred working ledger
+
+        A ledger is preferred if it has more support amongst trusted validators
+        and is *not* an ancestor of the current working ledger; otherwise it
+        remains the current working ledger.
+
+        @param ledger The local nodes current working ledger
+        @param minValidSeq The minimum allowable sequence number of th preferred
+                           ledger
+
+    */
+    ID
+    getPreferred(Ledger const & ledger, Seq minValidSeq)
+    {
+        checkAcquired();
+        Seq seq;
+        ID id;
+        std::tie(seq, id) = trie.getPreferred();
+
+        if(seq < minValidSeq)
+            return ledger.id();
+
+        // A ledger ahead of us is preferred regardless of whether it is
+        // a descendent of our working ledger or it is on a different chain
+        if(seq > ledger.seq())
+            return id;
+
+        // Only switch to earlier sequence numbers if it is a differnt chain
+        if(ledger[seq] != id )
+            return id;
+
+        // Stay on the current ledger by default
+        return ledger.id();
+
+    }
+};
 
 /** Maintains current and recent ledger validations.
 
@@ -156,8 +301,29 @@ getPreferredLedger(
              Adaptor instance itself.
 
     @code
+
+    // Conforms to the Ledger type requirements of LedgerTrie
+    struct Ledger
+    {
+        using ID = ID;
+        using Seq = Seq;
+
+        // The default ledger represents a ledger that prefixes all other ledgers
+        // (aka the genesis ledger)
+        Ledger();
+
+        // Return the sequence number of this ledger
+        Seq seq() const;
+
+        // Return the ID of this ledger's ancestor with given sequence number
+        ID operator[](Seq s);
+    };
+
     struct Validation
     {
+        using NodeKey = ...;
+        using NodeID = ...;
+
         // Ledger ID associated with this validation
         Ledger::ID ledgerID() const;
 
@@ -190,6 +356,7 @@ getPreferredLedger(
     {
         using Mutex = std::mutex;
         using Validation = Validation;
+        using Ledger = Ledger;
 
         // Handle a newly stale validation, this should do minimal work since
         // it is called by Validations while it may be iterating Validations
@@ -215,20 +382,17 @@ getPreferredLedger(
 template <class Adaptor>
 class Validations
 {
-    template <typename T>
-    using decay_result_t = std::decay_t<std::result_of_t<T>>;
 
     using Mutex = typename Adaptor::Mutex;
     using Validation = typename Adaptor::Validation;
+    using Ledger = typename Adaptor::Ledger;
+    using ID = typename Ledger::ID;
+    using Seq = typename Ledger::Seq;
+    using NodeKey = typename Validation::NodeKey;
+    using NodeID = typename Validation::NodeID;
 
-    using WrappedValidationType =
-        decay_result_t<decltype (&Validation::unwrap)(Validation)>;
-    using ID =
-        decay_result_t<decltype (&Validation::ledgerID)(Validation)>;
-    using NodeKey = decay_result_t<decltype (&Validation::key)(Validation)>;
-    using NodeID = decay_result_t<decltype (&Validation::nodeID)(Validation)>;
-    using Seq = decay_result_t<decltype (&Validation::seq)(Validation)>;
-
+    using WrappedValidationType = std::decay_t<
+        std::result_of_t<decltype (&Validation::unwrap)(Validation)>>;
 
     using ScopedLock = std::lock_guard<Mutex>;
 

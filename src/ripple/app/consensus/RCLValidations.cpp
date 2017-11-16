@@ -48,7 +48,7 @@ RCLValidationsAdaptor::now() const
 }
 
 void
-RCLValidationsAdaptor::onStale(RCLValidation&& v)
+RCLValidationsAdaptor::onStale(Validation&& v)
 {
     // Store the newly stale validation; do not do significant work in this
     // function since this is a callback from Validations, which may be
@@ -70,7 +70,7 @@ RCLValidationsAdaptor::onStale(RCLValidation&& v)
 }
 
 void
-RCLValidationsAdaptor::flush(hash_map<PublicKey, RCLValidation>&& remaining)
+RCLValidationsAdaptor::flush(hash_map<PublicKey, Validation>&& remaining)
 {
     bool anyNew = false;
     {
@@ -120,7 +120,7 @@ RCLValidationsAdaptor::doStaleWrite(ScopedLockType&)
 
     while (!staleValidations_.empty())
     {
-        std::vector<RCLValidation> currentStale;
+        std::vector<Validation> currentStale;
         currentStale.reserve(512);
         staleValidations_.swap(currentStale);
 
