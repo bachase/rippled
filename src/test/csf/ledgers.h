@@ -203,12 +203,11 @@ public:
     ID
     operator[](Seq seq) const;
 
-    /** Return the sequence number of the first mismatching ancestor in the half
-        open interval [start,seq)
+    /** Return the sequence number of the first mismatching ancestor
     */
     friend
     Ledger::Seq
-    mismatch(Ledger const & a, Ledger const & o, Seq start, Seq end);
+    mismatch(Ledger const & a, Ledger const & o);
 
     Json::Value getJson() const;
 
