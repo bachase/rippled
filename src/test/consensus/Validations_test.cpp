@@ -163,7 +163,7 @@ class Validations_test : public beast::unit_test::suite
         using Validation = csf::Validation;
         using Ledger = csf::Ledger;
 
-        Adaptor(StaleData& sd, clock_type& c) : staleData_{sd}, c_{c}
+        Adaptor(StaleData& sd, clock_type& c, beast::Journal) : staleData_{sd}, c_{c}
         {
         }
 

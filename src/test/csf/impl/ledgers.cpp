@@ -62,7 +62,7 @@ mismatch(Ledger const& a, Ledger const& b, Ledger::Seq start, Ledger::Seq end)
     using Seq = Ledger::Seq;
 
     // end is 1 past end of range
-    auto mend = std::min(std::min(end, a.seq() + Seq{1}), b.seq() + Seq{1});
+    Seq mend = std::min(std::min(end, a.seq() + Seq{1}), b.seq() + Seq{1});
 
     // Find mismatch in [start,mend)
 

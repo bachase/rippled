@@ -509,8 +509,8 @@ public:
 
         @param p ValidationParms to control staleness/expiration of validaitons
         @param c Clock to use for expiring validations stored by ledger
-        @param j Journal used for logging
-        @param ts Parameters for constructing StalePolicy instance
+        @param j Journal used for logging, passed to Adaptor constructor
+        @param ts Parameters for constructing Adaptor instance
     */
     template <class... Ts>
     Validations(
@@ -518,7 +518,7 @@ public:
         beast::abstract_clock<std::chrono::steady_clock>& c,
         beast::Journal j,
         Ts&&... ts)
-        : byLedger_(c), parms_(p), j_(j), adaptor_(std::forward<Ts>(ts)...)
+        : byLedger_(c), parms_(p), j_(j), adaptor_(std::forward<Ts>(ts)..., j)
     {
     }
 
@@ -529,7 +529,7 @@ public:
     {
         return parms_;
     }
-#if 0
+
     /** Return the journal
      */
     beast::Journal
@@ -537,7 +537,7 @@ public:
     {
         return j_;
     }
-#endif
+
     /** Result of adding a new validation
      */
     enum class AddOutcome {

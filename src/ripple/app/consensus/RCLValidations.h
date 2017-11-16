@@ -115,7 +115,14 @@ public:
     }
 };
 
-/** Wraps a ledger instance for use in generic Validations LedgerTrie. */
+/** Wraps a ledger instance for use in generic Validations LedgerTrie.
+
+    The LedgerTrie models a ledger's history as a map from Seq -> ID. Any
+    two ledgers that have the same ID for a given Seq have the same ID for
+    all earlier sequences (e.g. shared ancestry). In practice, a ledger only
+    conveniently has the prior 256 ancestor hashes available. For this adaptor
+    class, we treat any ledgers separated by more than 256 Seq as distinct.
+*/
 class RCLValidatedLedger
 {
     std::shared_ptr<Ledger const> ledger_;
@@ -126,14 +133,14 @@ public:
     using Seq = LedgerIndex;
 
     RCLValidatedLedger() = default;
+
     RCLValidatedLedger(std::shared_ptr<Ledger const> ledger, beast::Journal j)
-        : ledger_{std::move(ledger)}, j_{j} {}
+        : ledger_{std::move(ledger)}, j_{j}
+    {
+    }
 
     Seq
-    seq() const
-    {
-        return ledger_ ? ledger_->info().seq : Seq{0};
-    }
+    seq() const;
 
     ID operator[](Seq const& s) const;
 
@@ -151,18 +158,13 @@ public:
 */
 class RCLValidationsAdaptor
 {
-    Application& app_;
-    LedgerMaster& ledgerMaster_;
-    LocalTxs& localTxs_;
-    InboundTransactions& inboundTransactions_;
-    beast::Journal j_;
 public:
     // Type definitions for generic Validation
     using Mutex = std::mutex;
     using Validation = RCLValidation;
     using Ledger = RCLValidatedLedger;
 
-    RCLValidationsAdaptor(Application& app);
+    RCLValidationsAdaptor(Application& app, beast::Journal j);
 
     /** Current time used to determine if validations are stale.
      */
@@ -189,13 +191,14 @@ public:
 
     /** Attempt to acquire the ledger with given id from the network */
     boost::optional<RCLValidatedLedger>
-    acquire(RCLValidatedLedger::ID const & id);
+    acquire(LedgerHash const & id);
 
 private:
     using ScopedLockType = std::lock_guard<Mutex>;
     using ScopedUnlockType = GenericScopedUnlock<Mutex>;
 
     Application& app_;
+    beast::Journal j_;
 
     // Lock for managing staleValidations_ and writing_
     std::mutex staleLock_;
