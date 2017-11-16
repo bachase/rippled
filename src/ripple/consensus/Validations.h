@@ -529,7 +529,7 @@ public:
     {
         return parms_;
     }
-
+#if 0
     /** Return the journal
      */
     beast::Journal
@@ -537,7 +537,7 @@ public:
     {
         return j_;
     }
-
+#endif
     /** Result of adding a new validation
      */
     enum class AddOutcome {
