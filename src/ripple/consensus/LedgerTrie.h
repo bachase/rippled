@@ -82,9 +82,8 @@ namespace ripple {
        };
 
        // Return the sequence number of the first possible mismatching ancestor
-       // of the ledgers in the half-open interval [startSeq, endSeq)
        Seq
-       mismatch(ledgerA, ledgerB, startSeq, endSeq);
+       mismatch(ledgerA, ledgerB);
        @endcode
 
     The unique history invariant of ledgers requires any ledgers that agree
@@ -171,7 +170,7 @@ class LedgerTrie
         Seq
         diff(Ledger const& o) const
         {
-            return mismatch(ledger_, o, start_, end_);
+            return clamp(mismatch(ledger_, o));
         }
 
         std::pair<Seq, ID>
@@ -188,14 +187,16 @@ class LedgerTrie
             assert(start <= end);
         }
 
+        Seq
+        clamp(Seq val) const
+        {
+            return std::min(std::max(start_, val), end_);
+        };
+
         // Return a span of this over the half-open interval [from,to)
         Span
         sub(Seq from, Seq to)
         {
-            auto clamp = [&](Seq val) {
-                return std::min(std::max(start_, val), end_);
-            };
-
             return Span(clamp(from), clamp(to), ledger_);
         }
 
