@@ -36,19 +36,19 @@
 
 namespace ripple {
 
-RCLValidationsPolicy::RCLValidationsPolicy(Application& app) : app_(app)
+RCLValidationsAdaptor::RCLValidationsAdaptor(Application& app) : app_(app)
 {
     staleValidations_.reserve(512);
 }
 
 NetClock::time_point
-RCLValidationsPolicy::now() const
+RCLValidationsAdaptor::now() const
 {
     return app_.timeKeeper().closeTime();
 }
 
 void
-RCLValidationsPolicy::onStale(RCLValidation&& v)
+RCLValidationsAdaptor::onStale(RCLValidation&& v)
 {
     // Store the newly stale validation; do not do significant work in this
     // function since this is a callback from Validations, which may be
@@ -70,7 +70,7 @@ RCLValidationsPolicy::onStale(RCLValidation&& v)
 }
 
 void
-RCLValidationsPolicy::flush(hash_map<PublicKey, RCLValidation>&& remaining)
+RCLValidationsAdaptor::flush(hash_map<PublicKey, RCLValidation>&& remaining)
 {
     bool anyNew = false;
     {
@@ -106,7 +106,7 @@ RCLValidationsPolicy::flush(hash_map<PublicKey, RCLValidation>&& remaining)
 // NOTE: doStaleWrite() must be called with staleLock_ *locked*.  The passed
 // ScopedLockType& acts as a reminder to future maintainers.
 void
-RCLValidationsPolicy::doStaleWrite(ScopedLockType&)
+RCLValidationsAdaptor::doStaleWrite(ScopedLockType&)
 {
     static const std::string insVal(
         "INSERT INTO Validations "

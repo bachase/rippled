@@ -115,32 +115,17 @@ public:
 
 };
 
-/** Implements the StalePolicy policy class for adapting Validations in the RCL
+/** Generic validations adaptor classs for RCL
 
     Manages storing and writing stale RCLValidations to the sqlite DB.
 */
-class RCLValidationsPolicy
+class RCLValidationsAdaptor
 {
-    using LockType = std::mutex;
-    using ScopedLockType = std::lock_guard<LockType>;
-    using ScopedUnlockType = GenericScopedUnlock<LockType>;
-
-    Application& app_;
-
-    // Lock for managing staleValidations_ and writing_
-    std::mutex staleLock_;
-    std::vector<RCLValidation> staleValidations_;
-    bool staleWriting_ = false;
-
-    // Write the stale validations to sqlite DB, the scoped lock argument
-    // is used to remind callers that the staleLock_ must be *locked* prior
-    // to making the call
-    void
-    doStaleWrite(ScopedLockType&);
-
 public:
+    using Mutex = std::mutex;
+    using Validation = RCLValidation;
 
-    RCLValidationsPolicy(Application & app);
+    RCLValidationsAdaptor(Application& app);
 
     /** Current time used to determine if validations are stale.
     */
@@ -164,12 +149,28 @@ public:
     */
     void
     flush(hash_map<PublicKey, RCLValidation> && remaining);
+
+private:
+    using ScopedLockType = std::lock_guard<Mutex>;
+    using ScopedUnlockType = GenericScopedUnlock<Mutex>;
+
+    Application& app_;
+
+    // Lock for managing staleValidations_ and writing_
+    std::mutex staleLock_;
+    std::vector<RCLValidation> staleValidations_;
+    bool staleWriting_ = false;
+
+    // Write the stale validations to sqlite DB, the scoped lock argument
+    // is used to remind callers that the staleLock_ must be *locked* prior
+    // to making the call
+    void
+    doStaleWrite(ScopedLockType&);
 };
 
 
 /// Alias for RCL-specific instantiation of generic Validations
-using RCLValidations =
-    Validations<RCLValidationsPolicy, RCLValidation, std::mutex>;
+using RCLValidations = Validations<RCLValidationsAdaptor>;
 
 /** Handle a new validation
 

@@ -110,14 +110,29 @@ struct Peer
         }
     };
 
-    /** Generic Validations policy that simply ignores recently stale validations
+    /** Generic Validations adaptor that simply ignores recently stale validations
     */
-    class StalePolicy
+    class ValAdaptor
     {
         Peer& p_;
 
     public:
-        StalePolicy(Peer& p) : p_{p}
+        struct Mutex
+        {
+            void
+            lock()
+            {
+            }
+
+            void
+            unlock()
+            {
+            }
+        };
+
+        using Validation = csf::Validation;
+
+        ValAdaptor(Peer& p) : p_{p}
         {
         }
 
@@ -138,20 +153,7 @@ struct Peer
         }
     };
 
-    /** Non-locking mutex to avoid locks in generic Validations
-    */
-    struct NotAMutex
-    {
-        void
-        lock()
-        {
-        }
 
-        void
-        unlock()
-        {
-        }
-    };
 
     //! Type definitions for generic consensus
     using Ledger_t = Ledger;
@@ -195,9 +197,8 @@ struct Peer
     hash_map<Ledger::ID, Ledger> ledgers;
 
     //! Validations from trusted nodes
-    Validations<StalePolicy, Validation, NotAMutex> validations;
-    using AddOutcome =
-        Validations<StalePolicy, Validation, NotAMutex>::AddOutcome;
+    Validations<ValAdaptor> validations;
+    using AddOutcome = Validations<ValAdaptor>::AddOutcome;
 
     //! The most recent ledger that has been fully validated by the network from
     //! the perspective of this Peer

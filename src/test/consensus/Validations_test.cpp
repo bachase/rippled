@@ -138,15 +138,31 @@ class Validations_test : public beast::unit_test::suite
         hash_map<PeerKey, Validation> flushed;
     };
 
-    // Generic Validations policy that saves stale/flushed data into
+    // Generic Validations adaptor that saves stale/flushed data into
     // a StaleData instance.
-    class StalePolicy
+    class Adaptor
     {
         StaleData& staleData_;
         clock_type& c_;
 
     public:
-        StalePolicy(StaleData& sd, clock_type& c) : staleData_{sd}, c_{c}
+        // Non-locking mutex to avoid locks in generic Validations
+        struct Mutex
+        {
+            void
+            lock()
+            {
+            }
+
+            void
+            unlock()
+            {
+            }
+        };
+
+        using Validation = csf::Validation;
+
+        Adaptor(StaleData& sd, clock_type& c) : staleData_{sd}, c_{c}
         {
         }
 
@@ -169,22 +185,8 @@ class Validations_test : public beast::unit_test::suite
         }
     };
 
-    // Non-locking mutex to avoid locks in generic Validations
-    struct NotAMutex
-    {
-        void
-        lock()
-        {
-        }
-
-        void
-        unlock()
-        {
-        }
-    };
-
     // Specialize generic Validations using the above types
-    using TestValidations = Validations<StalePolicy, Validation, NotAMutex>;
+    using TestValidations = Validations<Adaptor>;
 
     // Hoist enum for writing simpler tests
     using AddOutcome = TestValidations::AddOutcome;
