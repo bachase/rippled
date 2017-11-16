@@ -75,12 +75,13 @@ namespace ripple {
           Seq seq() const;
 
           // Return the ID of this ledger's ancestor with given sequence number
+          // or ID{0} if unknown
           ID
           operator[](Seq s);
 
        };
 
-       // Return the sequence number of the first mismatching ancestor
+       // Return the sequence number of the first possible mismatching ancestor
        // of the ledgers in the half-open interval [startSeq, endSeq)
        Seq
        mismatch(ledgerA, ledgerB, startSeq, endSeq);
@@ -114,7 +115,12 @@ class LedgerTrie
         Ledger ledger_;
 
     public:
-        Span() = default;
+        Span()
+        {
+            // Require default ledger to be genesis seq
+            assert(ledger_.seq() == start_);
+        }
+
         Span(Ledger ledger)
             : start_{0}, end_{ledger.seq() + Seq{1}}, ledger_{std::move(ledger)}
         {
@@ -160,8 +166,8 @@ class LedgerTrie
             return ledger_[start_];
         }
 
-        // Return the ledger sequence number of the first difference between
-        // this span and a given ledger.
+        // Return the ledger sequence number of the first possible difference
+        //  between this span and a given ledger.
         Seq
         diff(Ledger const& o) const
         {
@@ -182,7 +188,7 @@ class LedgerTrie
             assert(start <= end);
         }
 
-        // Return a span of this over the half-open interval (from,to]
+        // Return a span of this over the half-open interval [from,to)
         Span
         sub(Seq from, Seq to)
         {

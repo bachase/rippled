@@ -19,6 +19,7 @@
 
 #include <BeastConfig.h>
 #include <ripple/app/consensus/RCLValidations.h>
+#include <ripple/app/ledger/InboundLedger.h>
 #include <ripple/app/ledger/LedgerMaster.h>
 #include <ripple/app/main/Application.h>
 #include <ripple/app/misc/NetworkOPs.h>
@@ -30,6 +31,7 @@
 #include <ripple/core/DatabaseCon.h>
 #include <ripple/core/JobQueue.h>
 #include <ripple/core/TimeKeeper.h>
+#include <boost/icl/right_open_interval.hpp>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -37,34 +39,79 @@
 namespace ripple {
 
 auto
+RCLValidatedLedger::seq() const -> Seq
+{
+    return ledger_ ? ledger_->info().seq : Seq{0};
+}
+
+auto
 RCLValidatedLedger::operator[](Seq const & s) const -> ID
 {
     if(ledger_)
     {
-        return hashOfSeq(ledger_, s, j_);
-    }
-    else
-    {
-        // this is the genesis ledger
-        return ID{0};
+        // TODO: consider caching the vector of 256 hashes?
+        boost::optional<ID> res = hashOfSeq(*ledger_, s, j_);
+        if(!res)
+        {
+            JLOG(j_.warn()) << "Unable to determine hash of ancestor seq=" << s
+                            << " from ledger hash=" << ledger_->info().hash
+                            << " seq=" << ledger_->info().seq;
+            // Default ID that is less than all others
+            return ID{0};
+        }
+        return *res;
     }
 
+    return ID{0};
 }
 
-// Return the sequence number of the first mismatching parent ledger of
-// a and b in the half-open interval (start,end]
+// Return the sequence number of the earliest possible mismatching ancestor
+// with sequence number in the half-open interval [start,end)
 RCLValidatedLedger::Seq
 mismatch(
     RCLValidatedLedger const& a,
     RCLValidatedLedger const& b,
-    RCLValidatedLedger::Seq const& start,
-    RCLValidatedLedger::Seq const& end)
+    RCLValidatedLedger::Seq const & reqStart,
+    RCLValidatedLedger::Seq const & reqEnd)
 {
-    return {0};
+    using Seq = RCLValidatedLedger::Seq;
+    using Interval = boost::icl::right_open_interval<Seq>;
+
+    // Determine the interval we can actually check
+    Interval reqInt(reqStart, reqEnd);
+    // a and b support up to 256 ledgers before their seq.seq()
+    Interval aInt(a.seq() - std::min(a.seq(), Seq{256}), a.seq() + Seq{1});
+    Interval bInt(b.seq() - std::min(b.seq(), Seq{256}), b.seq() + Seq{1});
+
+    // Intersect
+    Interval interval = reqInt & aInt & bInt;
+
+    Seq start = interval.lower();
+    Seq end = interval.upper();
+
+    // Find mismatch in [start,end) via binary search
+    Seq count = end - start;
+    while(count > Seq{0})
+    {
+        Seq step = count/Seq{2};
+        Seq curr = start + step;
+        if(a[curr] == b[curr])
+        {
+            // go to second half
+            start = ++curr;
+            count -= step + Seq{1};
+        }
+        else
+            count = step;
+    }
+    // If the searchable interval mismatches entirely, then we have to
+    // assume the entire requested search interval mismatches
+    return (start == interval.lower()) ? reqStart : start;
 }
 
 
-RCLValidationsAdaptor::RCLValidationsAdaptor(Application& app) : app_(app)
+RCLValidationsAdaptor::RCLValidationsAdaptor(Application& app, beast::Journal j)
+    : app_(app),  j_(j)
 {
     staleValidations_.reserve(512);
 }
@@ -78,26 +125,26 @@ RCLValidationsAdaptor::now() const
 boost::optional<RCLValidatedLedger>
 RCLValidationsAdaptor::acquire(LedgerHash const & hash)
 {
-    auto ledger = ledgerMaster_.getLedgerByHash(hash);
+    auto ledger = app_.getLedgerMaster().getLedgerByHash(hash);
     if (!ledger)
     {
-        JLOG(j_.debug()) << "Need validated ledger " << hash;
+        JLOG(j_.debug())
+            << "Need validated ledger for preferred ledger analysis " << hash;
 
-
-        Application * app = &app_;
+        Application * pApp = &app_;
 
         app_.getJobQueue().addJob(
-            jtADVANCE, "getConsensusLedger", [app, hash](Job&) {
-                app->getInboundLedgers().acquire(
+            jtADVANCE, "getConsensusLedger", [pApp, hash](Job&) {
+                pApp ->getInboundLedgers().acquire(
                     hash, 0, InboundLedger::fcVALIDATION);
             });
         return boost::none;
     }
 
     assert(!ledger->open() && ledger->isImmutable());
-    assert(ledger->info().hash == ledger);
+    assert(ledger->info().hash == hash);
 
-    return RCLValidatedLedger(std::move(ledger));
+    return RCLValidatedLedger(std::move(ledger), j_);
 }
 
 void
