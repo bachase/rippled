@@ -36,6 +36,34 @@
 
 namespace ripple {
 
+auto
+RCLValidatedLedger::operator[](Seq const & s) const -> ID
+{
+    if(ledger_)
+    {
+        return hashOfSeq(ledger_, s, j_);
+    }
+    else
+    {
+        // this is the genesis ledger
+        return ID{0};
+    }
+
+}
+
+// Return the sequence number of the first mismatching parent ledger of
+// a and b in the half-open interval (start,end]
+RCLValidatedLedger::Seq
+mismatch(
+    RCLValidatedLedger const& a,
+    RCLValidatedLedger const& b,
+    RCLValidatedLedger::Seq const& start,
+    RCLValidatedLedger::Seq const& end)
+{
+    return {0};
+}
+
+
 RCLValidationsAdaptor::RCLValidationsAdaptor(Application& app) : app_(app)
 {
     staleValidations_.reserve(512);
@@ -47,8 +75,33 @@ RCLValidationsAdaptor::now() const
     return app_.timeKeeper().closeTime();
 }
 
+boost::optional<RCLValidatedLedger>
+RCLValidationsAdaptor::acquire(LedgerHash const & hash)
+{
+    auto ledger = ledgerMaster_.getLedgerByHash(hash);
+    if (!ledger)
+    {
+        JLOG(j_.debug()) << "Need validated ledger " << hash;
+
+
+        Application * app = &app_;
+
+        app_.getJobQueue().addJob(
+            jtADVANCE, "getConsensusLedger", [app, hash](Job&) {
+                app->getInboundLedgers().acquire(
+                    hash, 0, InboundLedger::fcVALIDATION);
+            });
+        return boost::none;
+    }
+
+    assert(!ledger->open() && ledger->isImmutable());
+    assert(ledger->info().hash == ledger);
+
+    return RCLValidatedLedger(std::move(ledger));
+}
+
 void
-RCLValidationsAdaptor::onStale(Validation&& v)
+RCLValidationsAdaptor::onStale(RCLValidation&& v)
 {
     // Store the newly stale validation; do not do significant work in this
     // function since this is a callback from Validations, which may be
@@ -70,7 +123,7 @@ RCLValidationsAdaptor::onStale(Validation&& v)
 }
 
 void
-RCLValidationsAdaptor::flush(hash_map<PublicKey, Validation>&& remaining)
+RCLValidationsAdaptor::flush(hash_map<PublicKey, RCLValidation>&& remaining)
 {
     bool anyNew = false;
     {
@@ -120,7 +173,7 @@ RCLValidationsAdaptor::doStaleWrite(ScopedLockType&)
 
     while (!staleValidations_.empty())
     {
-        std::vector<Validation> currentStale;
+        std::vector<RCLValidation> currentStale;
         currentStale.reserve(512);
         staleValidations_.swap(currentStale);
 
@@ -131,10 +184,10 @@ RCLValidationsAdaptor::doStaleWrite(ScopedLockType&)
 
                 Serializer s(1024);
                 soci::transaction tr(*db);
-                for (auto const& rclValidation : currentStale)
+                for (RCLValidation const& wValidation : currentStale)
                 {
                     s.erase();
-                    STValidation::pointer const& val = rclValidation.unwrap();
+                    STValidation::pointer const& val = wValidation.unwrap();
                     val->add(s);
 
                     auto const ledgerHash = to_string(val->getLedgerHash());
