@@ -30,91 +30,6 @@ namespace ripple {
 
 class Application;
 
-/** Wrapper over STValidation for generic Validation code
-
-    Wraps an STValidation::pointer for compatibility with the generic validation
-    code.
-*/
-class RCLValidation
-{
-    STValidation::pointer val_;
-public:
-
-    /** Constructor
-
-        @param v The validation to wrap.
-    */
-    RCLValidation(STValidation::pointer const& v) : val_{v}
-    {
-    }
-
-    /// Validated ledger's hash
-    uint256
-    ledgerID() const
-    {
-        return val_->getLedgerHash();
-    }
-
-    /// Validated ledger's sequence number (0 if none)
-    std::uint32_t
-    seq() const
-    {
-        if(auto res = (*val_)[~sfLedgerSequence])
-            return *res;
-        return 0;
-    }
-
-    /// Validation's signing time
-    NetClock::time_point
-    signTime() const
-    {
-        return val_->getSignTime();
-    }
-
-    /// Validated ledger's first seen time
-    NetClock::time_point
-    seenTime() const
-    {
-        return val_->getSeenTime();
-    }
-
-    /// Public key of validator that published the validation
-    PublicKey
-    key() const
-    {
-        return val_->getSignerPublic();
-    }
-
-    /// NodeID of validator that published the validation
-    NodeID
-    nodeID() const
-    {
-        return val_->getNodeID();
-    }
-
-    /// Whether the validation is considered trusted.
-    bool
-    trusted() const
-    {
-        return val_->isTrusted();
-    }
-
-    /// Get the load fee of the validation if it exists
-    boost::optional<std::uint32_t>
-    loadFee() const
-    {
-        return ~(*val_)[~sfLoadFee];
-    }
-
-    /// Extract the underlying STValidation being wrapped
-    STValidation::pointer
-    unwrap() const
-    {
-        return val_;
-    }
-
-};
-
 /** Generic validations adaptor classs for RCL
 
     Manages storing and writing stale RCLValidations to the sqlite DB.
@@ -123,12 +38,112 @@ class RCLValidationsAdaptor
 {
 public:
     using Mutex = std::mutex;
-    using Validation = RCLValidation;
+
+    /** Wrapper over STValidation for generic Validation code.*/
+    class Validation
+    {
+        STValidation::pointer val_;
+
+    public:
+        using NodeKey = PublicKey;
+        using NodeID = ripple::NodeID;
+
+        /** Constructor
+
+            @param v The validation to wrap.
+        */
+        Validation(STValidation::pointer const& v) : val_{v}
+        {
+        }
+
+        /// Validated ledger's hash
+        uint256
+        ledgerID() const
+        {
+            return val_->getLedgerHash();
+        }
+
+        /// Validated ledger's sequence number (0 if none)
+        std::uint32_t
+        seq() const
+        {
+            if (auto res = (*val_)[~sfLedgerSequence])
+                return *res;
+            return 0;
+        }
+
+        /// Validation's signing time
+        NetClock::time_point
+        signTime() const
+        {
+            return val_->getSignTime();
+        }
+
+        /// Validated ledger's first seen time
+        NetClock::time_point
+        seenTime() const
+        {
+            return val_->getSeenTime();
+        }
+
+        /// Public key of validator that published the validation
+        PublicKey
+        key() const
+        {
+            return val_->getSignerPublic();
+        }
+
+        /// NodeID of validator that published the validation
+        NodeID
+        nodeID() const
+        {
+            return val_->getNodeID();
+        }
+
+        /// Whether the validation is considered trusted.
+        bool
+        trusted() const
+        {
+            return val_->isTrusted();
+        }
+
+        /// Get the load fee of the validation if it exists
+        boost::optional<std::uint32_t>
+        loadFee() const
+        {
+            return ~(*val_)[~sfLoadFee];
+        }
+
+        /// Extract the underlying STValidation being wrapped
+        STValidation::pointer
+        unwrap() const
+        {
+            return val_;
+        }
+    };
+
+    /** Wraps a ledger instance for use in generic Validations LedgerTrie. */
+    class Ledger
+    {
+    public:
+        using ID = uint256;
+        using Seq = LedgerIndex;
+
+        Seq
+        seq() const
+        {
+            return Seq{0};
+        }
+        ID operator[](Seq s)
+        {
+            return ID{};
+        }
+    };
 
     RCLValidationsAdaptor(Application& app);
 
     /** Current time used to determine if validations are stale.
-    */
+     */
     NetClock::time_point
     now() const;
 
@@ -141,14 +156,14 @@ public:
                  internal lock
     */
     void
-    onStale(RCLValidation&& v);
+    onStale(Validation&& v);
 
     /** Flush current validations to disk before shutdown.
 
         @param remaining The remaining validations to flush
     */
     void
-    flush(hash_map<PublicKey, RCLValidation> && remaining);
+    flush(hash_map<PublicKey, Validation>&& remaining);
 
 private:
     using ScopedLockType = std::lock_guard<Mutex>;
@@ -158,7 +173,7 @@ private:
 
     // Lock for managing staleValidations_ and writing_
     std::mutex staleLock_;
-    std::vector<RCLValidation> staleValidations_;
+    std::vector<Validation> staleValidations_;
     bool staleWriting_ = false;
 
     // Write the stale validations to sqlite DB, the scoped lock argument
@@ -167,7 +182,6 @@ private:
     void
     doStaleWrite(ScopedLockType&);
 };
-
 
 /// Alias for RCL-specific instantiation of generic Validations
 using RCLValidations = Validations<RCLValidationsAdaptor>;
@@ -186,8 +200,10 @@ using RCLValidations = Validations<RCLValidationsAdaptor>;
     @return Whether the validation should be relayed
 */
 bool
-handleNewValidation(Application & app, STValidation::ref val, std::string const& source);
-
+handleNewValidation(
+    Application& app,
+    STValidation::ref val,
+    std::string const& source);
 
 }  // namespace ripple
 

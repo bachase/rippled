@@ -131,6 +131,7 @@ struct Peer
         };
 
         using Validation = csf::Validation;
+        using Ledger = csf::Ledger;
 
         ValAdaptor(Peer& p) : p_{p}
         {
