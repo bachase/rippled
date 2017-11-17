@@ -383,6 +383,7 @@ JSS ( severity );                   // in: LogLevel
 JSS ( signature );                  // out: NetworkOPs, ChannelAuthorize
 JSS ( signature_verified );         // out: ChannelVerify
 JSS ( signing_key );                // out: NetworkOPs
+JSS ( signing_keys );               // out: ValidatorList
 JSS ( signing_time );               // out: NetworkOPs
 JSS ( signer_list );                // in: AccountObjects
 JSS ( signer_lists );               // in/out: AccountInfo

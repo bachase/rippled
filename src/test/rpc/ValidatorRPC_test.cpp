@@ -157,6 +157,7 @@ public:
             {
                 BEAST_EXPECT(keys.count(jKey.asString())== 1);
             }
+            BEAST_EXPECT(jrr[jss::signing_keys].size() == 0);
         }
         // No validator sites configured
         {
@@ -243,6 +244,7 @@ public:
                     BEAST_EXPECT(
                         jp[jss::pubkey_publisher] == strHex(publisherPublic));
                 }
+                BEAST_EXPECT(jrr[jss::signing_keys].size() == 0);
             }
             {
                 auto const jrr = env.rpc("validator_list_sites")[jss::result];
@@ -345,6 +347,7 @@ public:
                     BEAST_EXPECT(jp[jss::expiration] == to_string(expiration));
                     BEAST_EXPECT(jp[jss::version] == 1);
                 }
+                BEAST_EXPECT(jrr[jss::signing_keys].size() == 0);
             }
             {
                 auto const jrr = env.rpc("validator_list_sites")[jss::result];

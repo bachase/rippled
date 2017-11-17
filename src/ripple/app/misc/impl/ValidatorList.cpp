@@ -514,6 +514,20 @@ ValidatorList::getJson() const
         jValidatorKeys.append(toBase58(TokenType::TOKEN_NODE_PUBLIC, k));
     }
 
+    // signing keys
+    Json::Value& jSigningKeys = (res[jss::signing_keys] = Json::objectValue);
+    validatorManifests_.for_each_manifest(
+        [&jSigningKeys, this](Manifest const& manifest) {
+
+            auto it = keyListings_.find(manifest.masterKey);
+            if (it != keyListings_.end())
+            {
+                jSigningKeys[toBase58(
+                    TokenType::TOKEN_NODE_PUBLIC, manifest.masterKey)] =
+                    toBase58(TokenType::TOKEN_NODE_PUBLIC, manifest.signingKey);
+            }
+        });
+
     return res;
 }
 
