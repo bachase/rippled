@@ -262,7 +262,8 @@ public:
         ID id;
         std::tie(seq, id) = trie.getPreferred();
 
-        if(seq < minValidSeq)
+        // Too early preferred ledger, or unknown id
+        if(seq < minValidSeq || id == ID{})
             return ledger.id();
 
         // A ledger ahead of us is preferred regardless of whether it is
@@ -270,8 +271,9 @@ public:
         if(seq > ledger.seq())
             return id;
 
-        // Only switch to earlier sequence numbers if it is a differnt chain
-        if(ledger[seq] != id )
+        // Only switch to earlier sequence numbers if it is a different chain
+        // to avoid jumping backward unnecessarily
+        if(ledger[seq] != id)
             return id;
 
         // Stay on the current ledger by default
