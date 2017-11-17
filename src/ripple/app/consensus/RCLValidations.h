@@ -132,6 +132,9 @@ public:
     using ID = LedgerHash;
     using Seq = LedgerIndex;
 
+    // Consider at most 256 ancestors
+    static constexpr Seq maxAncestors{256};
+
     RCLValidatedLedger() = default;
 
     RCLValidatedLedger(std::shared_ptr<Ledger const> ledger, beast::Journal j)
@@ -142,14 +145,13 @@ public:
     Seq
     seq() const;
 
+    Seq
+    minSeq() const;
+
     ID operator[](Seq const& s) const;
 
     friend Seq
-    mismatch(
-        RCLValidatedLedger const& a,
-        RCLValidatedLedger const& b,
-        Seq const& start,
-        Seq const& end);
+    mismatch(RCLValidatedLedger const& a, RCLValidatedLedger const& b);
 };
 
 /** Generic validations adaptor classs for RCL

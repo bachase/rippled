@@ -39,6 +39,12 @@
 namespace ripple {
 
 auto
+RCLValidatedLedger::minSeq() const -> Seq
+{
+    return seq() - std::min(seq(),maxAncestors);
+}
+
+auto
 RCLValidatedLedger::seq() const -> Seq
 {
     return ledger_ ? ledger_->info().seq : Seq{0};
@@ -47,7 +53,7 @@ RCLValidatedLedger::seq() const -> Seq
 auto
 RCLValidatedLedger::operator[](Seq const & s) const -> ID
 {
-    if(ledger_)
+    if(ledger_ && s >= minSeq())
     {
         // TODO: consider caching the vector of 256 hashes?
         boost::optional<ID> res = hashOfSeq(*ledger_, s, j_);
@@ -66,25 +72,18 @@ RCLValidatedLedger::operator[](Seq const & s) const -> ID
 }
 
 // Return the sequence number of the earliest possible mismatching ancestor
-// with sequence number in the half-open interval [start,end)
 RCLValidatedLedger::Seq
-mismatch(
-    RCLValidatedLedger const& a,
-    RCLValidatedLedger const& b,
-    RCLValidatedLedger::Seq const & reqStart,
-    RCLValidatedLedger::Seq const & reqEnd)
+mismatch(RCLValidatedLedger const& a, RCLValidatedLedger const& b)
 {
     using Seq = RCLValidatedLedger::Seq;
     using Interval = boost::icl::right_open_interval<Seq>;
 
     // Determine the interval we can actually check
-    Interval reqInt(reqStart, reqEnd);
-    // a and b support up to 256 ledgers before their seq.seq()
-    Interval aInt(a.seq() - std::min(a.seq(), Seq{256}), a.seq() + Seq{1});
-    Interval bInt(b.seq() - std::min(b.seq(), Seq{256}), b.seq() + Seq{1});
+    Interval aInt(a.minSeq(), a.seq() + Seq{1});
+    Interval bInt(b.minSeq(), b.seq() + Seq{1});
 
     // Intersect
-    Interval interval = reqInt & aInt & bInt;
+    Interval interval = aInt & bInt;
 
     Seq start = interval.lower();
     Seq end = interval.upper();
@@ -105,8 +104,8 @@ mismatch(
             count = step;
     }
     // If the searchable interval mismatches entirely, then we have to
-    // assume the entire requested search interval mismatches
-    return (start == interval.lower()) ? reqStart : start;
+    // assume the ledgers mismatch starting post genesis ledger
+    return (start == interval.lower()) ? Seq{1} : start;
 }
 
 
