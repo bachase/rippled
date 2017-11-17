@@ -87,8 +87,14 @@ private:
         bool preverified,
         boost::asio::ssl::verify_context& ctx)
     {
-        return
-            boost::asio::ssl::rfc2818_verification (domain) (preverified, ctx);
+        char subject_name[256];
+        X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
+        X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
+        bool verified = boost::asio::ssl::rfc2818_verification (domain) (preverified, ctx);
+        std::cout << "Verifying: " << subject_name << "\n"
+                     "Verified: " << verified << std::endl;
+        return verified;
+
     }
 };
 
@@ -102,9 +108,10 @@ WorkSSL::WorkSSL(
     , context_()
     , stream_ (socket_, context_)
 {
+    SSL_set_tlsext_host_name(stream_.native_handle(), host.c_str());
     stream_.set_verify_mode (boost::asio::ssl::verify_peer);
-    stream_.set_verify_callback (
-        std::bind (
+    //stream_.set_verify_callback ( boost::asio::ssl::rfc2818_verification(host) );
+    stream_.set_verify_callback(    std::bind (
             &WorkSSL::rfc2818_verify, host_,
             std::placeholders::_1, std::placeholders::_2));
 }
