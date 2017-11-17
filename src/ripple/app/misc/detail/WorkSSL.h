@@ -26,9 +26,45 @@
 #include <boost/bind.hpp>
 #include <boost/format.hpp>
 
+#if BEAST_WINDOWS
+#include <wincrypt.h>
+#endif
+
 namespace ripple {
 
 namespace detail {
+
+#if BEAST_WINDOWS
+void
+add_windows_root_certs(boost::asio::ssl::context& ctx)
+{
+    HCERTSTORE hStore = CertOpenSystemStore(0, "ROOT");
+    if (hStore == NULL)
+    {
+        return;
+    }
+
+    X509_STORE* store = X509_STORE_new();
+    PCCERT_CONTEXT pContext = NULL;
+    while ((pContext = CertEnumCertificatesInStore(hStore, pContext)) != NULL)
+    {
+        X509* x509 = d2i_X509(
+            NULL,
+            (const unsigned char**)&pContext->pbCertEncoded,
+            pContext->cbCertEncoded);
+        if (x509 != NULL)
+        {
+            X509_STORE_add_cert(store, x509);
+            X509_free(x509);
+        }
+    }
+
+    CertFreeCertificateContext(pContext);
+    CertCloseStore(hStore, 0);
+
+    SSL_CTX_set_cert_store(ctx.native_handle(), store);
+}
+#endif
 
 class SSLContext : public boost::asio::ssl::context
 {
@@ -37,7 +73,12 @@ public:
     : boost::asio::ssl::context(boost::asio::ssl::context::sslv23)
     {
         boost::system::error_code ec;
+#if BEAST_WINDOWS
+        add_windows_root_certs(*this);
+#else
         set_default_verify_paths (ec);
+#endif
+
 
         if (ec)
         {
@@ -82,19 +123,12 @@ private:
     onHandshake(error_code const& ec);
 
     static bool
-    rfc2818_verify (
+    rfc2818_verify(
         std::string const& domain,
         bool preverified,
         boost::asio::ssl::verify_context& ctx)
     {
-        char subject_name[256];
-        X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
-        X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
-        bool verified = boost::asio::ssl::rfc2818_verification (domain) (preverified, ctx);
-        std::cout << "Verifying: " << subject_name << "\n"
-                     "Verified: " << verified << std::endl;
-        return verified;
-
+        return boost::asio::ssl::rfc2818_verification(domain)(preverified, ctx);
     }
 };
 
@@ -108,9 +142,9 @@ WorkSSL::WorkSSL(
     , context_()
     , stream_ (socket_, context_)
 {
+    // Ensure NMI is supported
     SSL_set_tlsext_host_name(stream_.native_handle(), host.c_str());
     stream_.set_verify_mode (boost::asio::ssl::verify_peer);
-    //stream_.set_verify_callback ( boost::asio::ssl::rfc2818_verification(host) );
     stream_.set_verify_callback(    std::bind (
             &WorkSSL::rfc2818_verify, host_,
             std::placeholders::_1, std::placeholders::_2));
