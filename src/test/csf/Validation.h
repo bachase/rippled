@@ -53,7 +53,8 @@ class Validation
     NetClock::time_point seenTime_;
     PeerKey key_;
     PeerID nodeID_{0};
-    bool trusted_ = true;
+    bool trusted_ = false;
+    bool partial_ = false;
     boost::optional<std::uint32_t> loadFee_;
 
 public:
@@ -66,7 +67,7 @@ public:
         NetClock::time_point seen,
         PeerKey key,
         PeerID nodeID,
-        bool trusted,
+        bool partial,
         boost::optional<std::uint32_t> loadFee = boost::none)
         : ledgerID_{id}
         , seq_{seq}
@@ -74,7 +75,7 @@ public:
         , seenTime_{seen}
         , key_{key}
         , nodeID_{nodeID}
-        , trusted_{trusted}
+        , partial_{partial}
         , loadFee_{loadFee}
     {
     }
@@ -119,6 +120,12 @@ public:
     trusted() const
     {
         return trusted_;
+    }
+
+    bool
+    partial() const
+    {
+        return partial_;
     }
 
     boost::optional<std::uint32_t>

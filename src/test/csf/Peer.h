@@ -232,6 +232,7 @@ struct Peer
 
     //! Whether to simulate running as validator or a tracking node
     bool runAsValidator = true;
+    Ledger::Seq largestFullValidation{0};
 
     //TODO: Consider removing these two, they are only a convenience for tests
     // Number of proposers in the prior round
@@ -534,7 +535,11 @@ struct Peer
         ConsensusMode const& mode,
         Json::Value&& consensusJson)
     {
-        schedule(delays.ledgerAccept, [&]() {
+        schedule(delays.ledgerAccept, [=]() {
+            const bool proposing = mode == ConsensusMode::proposing;
+            const bool haveCorrectLCL = mode != ConsensusMode::wrongLedger;
+            const bool consensusFail = result.state == ConsensusState::MovedOn;
+
             TxSet const acceptedTxs = injectTxs(prevLedger, result.set);
             Ledger const newLedger = oracle.accept(
                 prevLedger,
@@ -559,16 +564,22 @@ struct Peer
             bool const isCompatible =
                 newLedger.isAncestor(fullyValidatedLedger);
 
-            if (runAsValidator && isCompatible)
+            if (runAsValidator && isCompatible && !consensusFail)
             {
+                // Can only send one fully validated ledger per seq
+                bool isFull =
+                    proposing && newLedger.seq() > largestFullValidation;
+                largestFullValidation =
+                    std::max(largestFullValidation, newLedger.seq());
+
                 Validation v{newLedger.id(),
                              newLedger.seq(),
                              now(),
                              now(),
                              key,
                              id,
-                             false};
-                // share is not trusted
+                             isFull};
+                // share thew new validation; it is trusted by the receiver
                 share(v);
                 // we trust ourselves
                 addTrustedValidation(v);

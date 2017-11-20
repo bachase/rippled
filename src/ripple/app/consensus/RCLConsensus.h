@@ -68,6 +68,7 @@ class RCLConsensus
 
         // The timestamp of the last validation we used
         NetClock::time_point lastValidationTime_;
+        LedgerIndex lastFullValidationSeq_ = 0;
 
         // These members are queried via public accesors and are atomic for
         // thread safety.
