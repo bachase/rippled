@@ -117,8 +117,11 @@ class Validations_test : public beast::unit_test::suite
             NetClock::duration signOffset,
             NetClock::duration seenOffset) const
         {
-            return Validation{i, seq, now() + signOffset, now() + seenOffset,
-                currKey(), nodeID_, trusted_, loadFee_};
+            Validation v{i, seq, now() + signOffset, now() + seenOffset,
+                currKey(), nodeID_, true /* full */, loadFee_};
+            if(trusted_)
+                v.setTrusted();
+            return v;
         }
 
         // Issue a new validation with the given sequence number and id
