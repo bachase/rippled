@@ -152,6 +152,14 @@ struct Peer
         flush(hash_map<PeerKey, Validation>&& remaining)
         {
         }
+
+        boost::optional<Ledger>
+        acquire(Ledger::ID const & id)
+        {
+            if(Ledger const * ledger = p_.acquireLedger(id))
+                return *ledger;
+            return boost::none;
+        }
     };
 
 
@@ -456,9 +464,9 @@ struct Peer
     }
 
     std::size_t
-    proposersFinished(Ledger::ID const& prevLedger)
+    proposersFinished(Ledger const & prevLedger, Ledger::ID const& prevLedgerID)
     {
-        return validations.getNodesAfter(prevLedger);
+        return validations.getNodesAfter(prevLedger, prevLedgerID);
     }
 
     Result
@@ -592,22 +600,12 @@ struct Peer
         if (ledger.seq() == Ledger::Seq{0})
             return ledgerID;
 
-        Ledger::ID parentID{0};
-        // Only set the parent ID if we believe ledger is the right ledger
-        if (mode != ConsensusMode::wrongLedger)
-            parentID = ledger.parentID();
+        Ledger::ID const netLgr =
+            validations.getPreferred(ledger, earliestAllowedSeq());
 
-        // Get validators that are on our ledger, or "close" to being on
-        // our ledger.
-        auto const ledgerCounts = validations.currentTrustedDistribution(
-            ledgerID, parentID, earliestAllowedSeq());
-
-        Ledger::ID const netLgr = getPreferredLedger(ledgerID, ledgerCounts);
-
-        if (netLgr != ledgerID)
-        {
+        if (netLgr != ledgerID && netLgr != Ledger::ID{})
             issue(WrongPrevLedger{ledgerID, netLgr});
-        }
+
         return netLgr;
     }
 
@@ -838,14 +836,11 @@ struct Peer
     void
     startRound()
     {
-        auto const valDistribution = validations.currentTrustedDistribution(
-            lastClosedLedger.id(),
-            lastClosedLedger.parentID(),
-            earliestAllowedSeq());
-
         // Between rounds, we take the majority ledger and use the
-        Ledger::ID const bestLCL =
-            getPreferredLedger(lastClosedLedger.id(), valDistribution);
+        Ledger::ID bestLCL =
+            validations.getPreferred(lastClosedLedger, earliestAllowedSeq());
+        if(bestLCL == Ledger::ID{})
+            bestLCL = lastClosedLedger.id();
 
         issue(StartRound{bestLCL, lastClosedLedger});
 

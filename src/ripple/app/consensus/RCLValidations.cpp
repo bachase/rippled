@@ -63,12 +63,12 @@ RCLValidatedLedger::operator[](Seq const & s) const -> ID
                             << " from ledger hash=" << ledger_->info().hash
                             << " seq=" << ledger_->info().seq;
             // Default ID that is less than all others
-            return ID{0};
+            return ID{};
         }
         return *res;
     }
 
-    return ID{0};
+    return ID{};
 }
 
 // Return the sequence number of the earliest possible mismatching ancestor
