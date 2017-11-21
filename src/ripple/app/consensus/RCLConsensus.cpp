@@ -232,9 +232,13 @@ RCLConsensus::Adaptor::proposersValidated(LedgerHash const& h) const
 }
 
 std::size_t
-RCLConsensus::Adaptor::proposersFinished(LedgerHash const& h) const
+RCLConsensus::Adaptor::proposersFinished(
+    RCLCxLedger const& ledger,
+    LedgerHash const& h) const
 {
-    return app_.getValidations().getNodesAfter(h);
+    RCLValidations & validations = app_.getValidations();
+    return validations.getNodesAfter(
+        RCLValidatedLedger{ledger.ledger_, validations.journal()}, h);
 }
 
 uint256
@@ -243,29 +247,18 @@ RCLConsensus::Adaptor::getPrevLedger(
     RCLCxLedger const& ledger,
     ConsensusMode mode)
 {
-    uint256 parentID;
-    // Only set the parent ID if we believe ledger is the right ledger
-    if (mode != ConsensusMode::wrongLedger)
-        parentID = ledger.parentID();
+    RCLValidations& validations = app_.getValidations();
+    uint256 netLgr = validations.getPreferred(
+        RCLValidatedLedger{ledger.ledger_, validations.journal()},
+        ledgerMaster_.getValidLedgerIndex());
 
-    // Get validators that are on our ledger, or "close" to being on
-    // our ledger.
-    hash_map<uint256, std::uint32_t> ledgerCounts =
-        app_.getValidations().currentTrustedDistribution(
-            ledgerID, parentID, ledgerMaster_.getValidLedgerIndex());
-
-    uint256 netLgr = getPreferredLedger(ledgerID, ledgerCounts);
-
-    if (netLgr != ledgerID)
+    if (netLgr != ledgerID && netLgr != uint256{})
     {
         if (mode != ConsensusMode::wrongLedger)
             app_.getOPs().consensusViewChange();
 
         if (auto stream = j_.debug())
-        {
-            for (auto const & it : ledgerCounts)
-                stream << "V: " << it.first << ", " << it.second;
-        }
+            stream << validations.getJsonTrie();
     }
 
     return netLgr;

@@ -104,36 +104,6 @@ isCurrent(
          (seenTime < (now + p.validationCURRENT_LOCAL)));
 }
 
-/** Determine the preferred ledger based on its support
-
-    @param current The current ledger the node follows
-    @param dist Ledger IDs and corresponding counts of support
-    @return The ID of the ledger with most support, preferring to stick with
-            current ledger in the case of equal support
-*/
-template <class ID>
-inline ID
-getPreferredLedger(
-    ID const& current,
-    hash_map<ID, std::uint32_t> const& dist)
-{
-    ID netLgr = current;
-    int netLgrCount = 0;
-    for (auto const& it : dist)
-    {
-        // Switch to ledger supported by more peers
-        // On a tie, prefer the current ledger, or the one with higher ID
-        if ((it.second > netLgrCount) ||
-            ((it.second == netLgrCount) &&
-             ((it.first == current) ||
-              (it.first > netLgr && netLgr != current))))
-        {
-            netLgr = it.first;
-            netLgrCount = it.second;
-        }
-    }
-    return netLgr;
-}
 
 /** Monitors the preferred validation chain.
 
@@ -161,7 +131,7 @@ class Preferred
     using Seq = typename Ledger::Seq;
     using NodeKey = typename Validation::NodeKey;
 
-    Adaptor adaptor_;
+    Adaptor& adaptor_;
 
     // Represents the ancestry of validated ledgers
     LedgerTrie<Ledger> trie_;
@@ -181,10 +151,10 @@ class Preferred
     {
         for (auto it = acquiring_.begin(); it != acquiring_.end();)
         {
-            if (Ledger ledger = adaptor_.acquire(it.first))
+            if (boost::optional<Ledger> ledger = adaptor_.acquire(it->first))
             {
-                for (NodeKey const& key : it.second)
-                    updateTrie(key, ledger);
+                for (NodeKey const& key : it->second)
+                    updateTrie(key, *ledger);
 
                 it = acquiring_.erase(it);
             }
@@ -196,18 +166,19 @@ class Preferred
     void
     updateTrie(NodeKey const & key, Ledger ledger)
     {
-        assert(val.id() == ledger.id());
-
-        auto const ins = lastLedger_.emplace(key, ledger);
+        auto ins = lastLedger_.emplace(key, ledger);
         if(!ins.second)
         {
-            trie.remove(ins.first->second);
+            trie_.remove(ins.first->second);
             ins.first->second = ledger;
         }
-        trie.insert(ledger);
+        trie_.insert(ledger);
     }
 
 public:
+
+    Preferred(Adaptor & adaptor) : adaptor_(adaptor) {}
+
     /** Process a new validation
 
         Process a new trusted validation from a validator. This will be
@@ -221,13 +192,13 @@ public:
     void
     update(NodeKey const & key, Validation const & val)
     {
-        assert(val.isTrusted());
+        assert(val.trusted());
 
         auto const ins = lastValidation_.emplace(key, val);
         if(!ins.second)
         {
             // Clear any prior acquiring ledger for this node
-            auto it = acquiring_.find(ins.first->second.id());
+            auto it = acquiring_.find(ins.first->second.ledgerID());
             if(it != acquiring_.end())
                 it->second.erase(key);
             // Set the last validation
@@ -236,10 +207,10 @@ public:
 
         checkAcquired();
 
-        if(Ledger ledger = adaptor_.acquire(val.id()))
-            updateTrie(key, ledger);
+        if(boost::optional<Ledger> ledger = adaptor_.acquire(val.ledgerID()))
+            updateTrie(key, *ledger);
         else
-            acquiring_[val.id()].insert(key);
+            acquiring_[val.ledgerID()].insert(key);
 
     }
 
@@ -250,8 +221,11 @@ public:
         remains the current working ledger.
 
         @param ledger The local nodes current working ledger
-        @param minValidSeq The minimum allowable sequence number of th preferred
+        @param minValidSeq The minimum allowable sequence number of the preferred
                            ledger
+
+        @return The id of the preferred working ledger, or ID{} if no trusted
+                validations are available to determine the preferred ledger
 
     */
     ID
@@ -260,11 +234,11 @@ public:
         checkAcquired();
         Seq seq;
         ID id;
-        std::tie(seq, id) = trie.getPreferred();
+        std::tie(seq, id) = trie_.getPreferred();
 
         // Too early preferred ledger, or unknown id
         if(seq < minValidSeq || id == ID{})
-            return ledger.id();
+            return ID{};
 
         // A ledger ahead of us is preferred regardless of whether it is
         // a descendent of our working ledger or it is on a different chain
@@ -277,8 +251,32 @@ public:
             return id;
 
         // Stay on the current ledger by default
-        return ledger.id();
+        return ledger[ledger.seq()];
 
+    }
+
+    std::uint32_t
+    getNodesAfter(Ledger const & ledger, ID const & ledgerID)
+    {
+        // Use trie if ledger is the right one
+        if(ledger[ledger.seq()] == ledgerID)
+            return trie_.branchSupport(ledger) - trie_.tipSupport(ledger);
+
+        // Count parent ledgers as fallback
+        std::uint32_t count = 0;
+        for(auto const & it : lastLedger_)
+        {
+            Ledger const & curr = it.second;
+            if (curr.seq() > Seq{0} && curr[curr.seq() - Seq{1}] == ledgerID)
+                ++count;
+        }
+        return count;
+    }
+
+    Json::Value
+    getJsonTrie() const
+    {
+        return trie_.getJson();
     }
 };
 
@@ -399,24 +397,18 @@ class Validations
     using ScopedLock = std::lock_guard<Mutex>;
 
     // Manages concurrent access to current_ and byLedger_
-    Mutex mutex_;
+    mutable Mutex mutex_;
 
-    //! For the most recent validation, we also want to store the ID
-    //! of the ledger it replaces
-    struct ValidationAndPrevID
-    {
-        ValidationAndPrevID(Validation const& v) : val{v}, prevLedgerID{0}
-        {
-        }
+    //! Preferred trie from currently trusted nodes (partial and full vals)
+    Preferred<Adaptor> preferred_;
 
-        Validation val;
-        ID prevLedgerID;
-    };
+    //! Validations from currently listed and trusted nodes (partial and full)
+    hash_map<NodeKey, Validation> current_;
 
-    //! The latest validation from each node
-    hash_map<NodeKey, ValidationAndPrevID> current_;
+    //! Sequence of the largest full validation received from each node
+    hash_map<NodeKey, Seq> largestFullValidation_;
 
-    //! Recent validations from nodes, indexed by ledger identifier
+    //! Validations from listed nodes, indexed by ledger id (partial and full)
     beast::aged_unordered_map<
         ID,
         hash_map<NodeKey, Validation>,
@@ -463,10 +455,10 @@ private:
             // Check for staleness, if time specified
             if (t &&
                 !isCurrent(
-                    parms_, *t, it->second.val.signTime(), it->second.val.seenTime()))
+                    parms_, *t, it->second.signTime(), it->second.seenTime()))
             {
                 // contains a stale record
-                adaptor_.onStale(std::move(it->second.val));
+                adaptor_.onStale(std::move(it->second));
                 it = current_.erase(it);
             }
             else
@@ -520,7 +512,7 @@ public:
         beast::abstract_clock<std::chrono::steady_clock>& c,
         beast::Journal j,
         Ts&&... ts)
-        : byLedger_(c), parms_(p), j_(j), adaptor_(std::forward<Ts>(ts)..., j)
+        : byLedger_(c), parms_(p), j_(j), adaptor_(std::forward<Ts>(ts)..., j), preferred_{adaptor_}
     {
     }
 
@@ -545,135 +537,76 @@ public:
     enum class AddOutcome {
         /// This was a new validation and was added
         current,
-        /// Already had this validation
+        /// Already had this exact same validation
         repeat,
         /// Not current or was older than current from this node
         stale,
         /// Had a validation with same sequence number
         sameSeq,
+        /// A validation was marked full but it violates increasing seq
+        badFull
     };
+
 
     /** Add a new validation
 
         Attempt to add a new validation.
 
-        @param key The NodeKey to use for the validation
-        @param val The validation to store
-        @return The outcome of the attempt
+        @param key The master key associated with this validation
+        @param val The validationo to store
+        @return The outcome
 
-        @note The provided key may differ from the validation's
-              key() member since we might be storing by master key and the
-              validation might be signed by a temporary or rotating key.
-
+        @note The provided key may differ from the validations's  key()
+              member if the validator is using ephemeral signing keys.
     */
     AddOutcome
     add(NodeKey const& key, Validation const& val)
     {
-        NetClock::time_point t = adaptor_.now();
-        if (!isCurrent(parms_, t, val.signTime(), val.seenTime()))
+        if (!isCurrent(parms_, adaptor_.now(), val.signTime(), val.seenTime()))
             return AddOutcome::stale;
-
-        ID const& id = val.ledgerID();
-
-        // This is only seated if a validation became stale
-        boost::optional<Validation> maybeStaleValidation;
-
-        AddOutcome result = AddOutcome::current;
 
         {
             ScopedLock lock{mutex_};
 
-            auto const ret = byLedger_[id].emplace(key, val);
+            // Ensure full validations are for increasing sequence numbers
+            if (val.isFull() && val.seq() != Seq{0})
+            {
+                auto const ins = largestFullValidation_.emplace(key, val.seq());
+                if (!ins.second)
+                {
+                    if (val.seq() <= ins.first->second)
+                        return AddOutcome::badFull;
+                    ins.first->second = val.seq();
+                }
+            }
 
             // This validation is a repeat if we already have
-            // one with the same id and signing key.
+            // one with the same id for this key
+            auto const ret = byLedger_[val.ledgerID()].emplace(key, val);
             if (!ret.second && ret.first->second.key() == val.key())
                 return AddOutcome::repeat;
 
-            // Attempt to insert
             auto const ins = current_.emplace(key, val);
-
             if (!ins.second)
             {
-                // Had a previous validation from the node, consider updating
-                Validation& oldVal = ins.first->second.val;
-                ID const previousLedgerID = ins.first->second.prevLedgerID;
-
-                Seq const oldSeq{oldVal.seq()};
-                Seq const newSeq{val.seq()};
-
-                // Sequence of 0 indicates a missing sequence number
-                if ((oldSeq != Seq{0}) && (newSeq != Seq{0}) &&
-                    oldSeq == newSeq)
+                // Replace existing only if this one is newer
+                Validation& oldVal = ins.first->second;
+                if (val.signTime() > oldVal.signTime())
                 {
-                    result = AddOutcome::sameSeq;
-
-                    // If the validation key was revoked, update the
-                    // existing validation in the byLedger_ set
-                    if (val.key() != oldVal.key())
-                    {
-                        auto const mapIt = byLedger_.find(oldVal.ledgerID());
-                        if (mapIt != byLedger_.end())
-                        {
-                            auto& validationMap = mapIt->second;
-                            // If a new validation with the same ID was
-                            // reissued we simply replace.
-                            if(oldVal.ledgerID() == val.ledgerID())
-                            {
-                                auto replaceRes = validationMap.emplace(key, val);
-                                // If it was already there, replace
-                                if(!replaceRes.second)
-                                    replaceRes.first->second = val;
-                            }
-                            else
-                            {
-                                // If the new validation has a different ID,
-                                // we remove the old.
-                                validationMap.erase(key);
-                                // Erase the set if it is now empty
-                                if (validationMap.empty())
-                                    byLedger_.erase(mapIt);
-                            }
-                        }
-                    }
-                }
-
-                if (val.signTime() > oldVal.signTime() ||
-                    val.key() != oldVal.key())
-                {
-                    // This is either a newer validation or a new signing key
-                    ID const prevID = [&]() {
-                        // In the normal case, the prevID is the ID of the
-                        // ledger we replace
-                        if (oldVal.ledgerID() != val.ledgerID())
-                            return oldVal.ledgerID();
-                        // In the case the key was revoked and a new validation
-                        // for the same ledger ID was sent, the previous ledger
-                        // is still the one the now revoked validation had
-                        return previousLedgerID;
-                    }();
-
-                    // Allow impl to take over oldVal
-                    maybeStaleValidation.emplace(std::move(oldVal));
-                    // Replace old val in the map and set the previous ledger ID
-                    ins.first->second.val = val;
-                    ins.first->second.prevLedgerID = prevID;
+                    adaptor_.onStale(std::move(oldVal));
+                    ins.first->second = val;
+                    if (val.trusted())
+                        preferred_.update(key, val);
                 }
                 else
-                {
-                    // We already have a newer validation from this source
-                    result = AddOutcome::stale;
-                }
+                    return AddOutcome::stale;
+            }
+            else if (val.trusted())
+            {
+                preferred_.update(key, val);
             }
         }
-
-        // Handle the newly stale validation outside the lock
-        if (maybeStaleValidation)
-        {
-            adaptor_.onStale(std::move(*maybeStaleValidation));
-        }
-
-        return result;
+        return AddOutcome::current;
     }
 
     /** Expire old validation sets
@@ -688,103 +621,40 @@ public:
         beast::expire(byLedger_, parms_.validationSET_EXPIRES);
     }
 
-    /** Distribution of current trusted validations
-
-        Calculates the distribution of current validations but allows
-        ledgers one away from the current ledger to count as the current.
-
-        @param currentLedger The identifier of the ledger we believe is current
-                             (0 if unknown)
-        @param priorLedger The identifier of our previous current ledger
-                           (0 if unknown)
-        @param cutoffBefore Ignore ledgers with sequence number before this
-
-        @return Map representing the distribution of ledgerID by count
-    */
-    hash_map<ID, std::uint32_t>
-    currentTrustedDistribution(
-        ID const& currentLedger,
-        ID const& priorLedger,
-        Seq cutoffBefore)
+    Json::Value
+    getJsonTrie() const
     {
-        bool const valCurrentLedger = currentLedger != ID{0};
-        bool const valPriorLedger = priorLedger != ID{0};
-
-        hash_map<ID, std::uint32_t> ret;
-
-        current(
-            adaptor_.now(),
-            // The number of validations does not correspond to the number of
-            // distinct ledgerIDs so we do not call reserve on ret.
-            [](std::size_t) {},
-            [this,
-             &cutoffBefore,
-             &currentLedger,
-             &valCurrentLedger,
-             &valPriorLedger,
-             &priorLedger,
-             &ret](NodeKey const&, ValidationAndPrevID const& vp) {
-                Validation const& v = vp.val;
-                ID const& prevLedgerID = vp.prevLedgerID;
-                if (!v.trusted())
-                    return;
-
-                Seq const seq = v.seq();
-                if ((seq == Seq{0}) || (seq >= cutoffBefore))
-                {
-                    // contains a live record
-                    bool countPreferred =
-                        valCurrentLedger && (v.ledgerID() == currentLedger);
-
-                    if (!countPreferred &&  // allow up to one ledger slip in
-                                            // either direction
-                        ((valCurrentLedger &&
-                          (prevLedgerID == currentLedger)) ||
-                         (valPriorLedger && (v.ledgerID() == priorLedger))))
-                    {
-                        countPreferred = true;
-                        JLOG(this->j_.trace()) << "Counting for " << currentLedger
-                                         << " not " << v.ledgerID();
-                    }
-
-                    if (countPreferred)
-                        ret[currentLedger]++;
-                    else
-                        ret[v.ledgerID()]++;
-                }
-            });
-
-        return ret;
+        ScopedLock lock{mutex_};
+        return preferred_.getJsonTrie();
     }
 
-    /** Count the number of current trusted validators working on the next
-        ledger.
+    /** Get preferred working ledger
+    */
+    ID
+    getPreferred(Ledger const & ledger, Seq minValidSeq)
+    {
+        // check for stale?
+        ScopedLock lock{mutex_};
+        return preferred_.getPreferred(ledger, minValidSeq);
+    }
 
-        Counts the number of current trusted validations that replaced the
-        provided ledger.  Does not check or update staleness of the validations.
+    /** Count the number of current trusted validators working on a ledger
+        after the specified one.
 
-        @param ledgerID The identifier of the preceding ledger of interest
-        @return The number of current trusted validators with ledgerID as the
-                prior ledger.
+        @param ledger The working ledger
+        @param ledgerID The preferred ledger
+        @return The number of current trusted validators working on a descendent
+                of the preferred ledger
     */
     std::size_t
-    getNodesAfter(ID const& ledgerID)
+    getNodesAfter(Ledger const& ledger, ID const & ledgerID)
     {
-        std::size_t count = 0;
-
-        // Historically this did not not check for stale validations
-        // That may not be important, but this preserves the behavior
-        current(
-            boost::none,
-            [&](std::size_t) {}, // nothing to reserve
-            [&](NodeKey const&, ValidationAndPrevID const& v) {
-                if (v.val.trusted() && v.prevLedgerID == ledgerID)
-                    ++count;
-            });
-        return count;
+        // check for stale?
+        ScopedLock lock{mutex_};
+        return preferred_.getNodesAfter(ledger, ledgerID);
     }
 
-    /** Get the currently trusted validations
+    /** Get the currently trusted full validations
 
         @return Vector of validations from currently trusted validators
     */
@@ -796,9 +666,9 @@ public:
         current(
             adaptor_.now(),
             [&](std::size_t numValidations) { ret.reserve(numValidations); },
-            [&](NodeKey const&, ValidationAndPrevID const& v) {
-                if (v.val.trusted())
-                    ret.push_back(v.val.unwrap());
+            [&](NodeKey const&, Validation const& v) {
+                if (v.trusted() && v.isFull())
+                    ret.push_back(v.unwrap());
             });
         return ret;
     }
@@ -815,7 +685,7 @@ public:
         current(
             adaptor_.now(),
             [&](std::size_t numValidations) { ret.reserve(numValidations); },
-            [&](NodeKey const& k, ValidationAndPrevID const&) { ret.insert(k); });
+            [&](NodeKey const& k, Validation const&) { ret.insert(k); });
 
         return ret;
     }
@@ -916,7 +786,7 @@ public:
             ScopedLock lock{mutex_};
             for (auto it : current_)
             {
-                flushed.emplace(it.first, std::move(it.second.val));
+                flushed.emplace(it.first, std::move(it.second));
             }
             current_.clear();
         }

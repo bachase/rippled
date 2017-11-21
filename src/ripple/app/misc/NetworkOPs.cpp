@@ -1280,6 +1280,7 @@ bool NetworkOPsImp::checkLastClosedLedger (
     };
 
     hash_map<uint256, ValidationCount> ledgers;
+#if 0
     {
         hash_map<uint256, std::uint32_t> current =
             app_.getValidations().currentTrustedDistribution(
@@ -1290,7 +1291,7 @@ bool NetworkOPsImp::checkLastClosedLedger (
         for (auto& it: current)
             ledgers[it.first].trustedValidations += it.second;
     }
-
+#endif
     auto& ourVC = ledgers[closedLedger];
 
     if (mMode >= omTRACKING)

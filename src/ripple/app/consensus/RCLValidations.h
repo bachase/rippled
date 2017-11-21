@@ -100,6 +100,12 @@ public:
         return val_->isTrusted();
     }
 
+    bool
+    isFull() const
+    {
+        return val_->isFull();
+    }
+
     /// Get the load fee of the validation if it exists
     boost::optional<std::uint32_t>
     loadFee() const
@@ -136,7 +142,7 @@ public:
     static constexpr Seq maxAncestors{256};
 
     RCLValidatedLedger() = default;
-
+    
     RCLValidatedLedger(std::shared_ptr<Ledger const> ledger, beast::Journal j)
         : ledger_{std::move(ledger)}, j_{j}
     {
