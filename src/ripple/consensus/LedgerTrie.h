@@ -377,6 +377,8 @@ public:
             newNode->branchSupport = loc->branchSupport;
             using std::swap;
             swap(newNode->children, loc->children);
+            for(std::unique_ptr<Node> & child : newNode->children)
+                child->parent = newNode.get();
 
             // Loc truncates to prefix and newNode is its child
             loc->span = prefix;
@@ -449,12 +451,10 @@ public:
                         // This node can be combined with its child
                         std::unique_ptr<Node> child =
                             std::move(loc->children.front());
-                        // Promote grand-children
-                        loc->children.clear();
-                        std::swap(loc->children, child->children);
-                        loc->tipSupport = child->tipSupport;
-                        loc->branchSupport = child->branchSupport;
-                        loc->span = merge(loc->span, child->span);
+                        child->span = merge(loc->span, child->span);
+                        child->parent = loc->parent;
+                        loc->parent->children.emplace_back(std::move(child));
+                        loc->parent->erase(loc);
                     }
                 }
                 return true;
@@ -631,6 +631,9 @@ public:
             std::size_t support = curr->tipSupport;
             for (auto const& child : curr->children)
             {
+                if(child->parent != curr)
+                    return false;
+
                 support += child->branchSupport;
                 nodes.push(child.get());
             }
