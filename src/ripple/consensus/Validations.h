@@ -229,30 +229,46 @@ public:
 
     */
     ID
-    getPreferred(Ledger const & ledger, Seq minValidSeq)
+    getPreferred(Ledger const& currLedger, Seq minValidSeq)
     {
         checkAcquired();
-        Seq seq;
-        ID id;
-        std::tie(seq, id) = trie_.getPreferred();
+        Seq preferredSeq;
+        ID preferredID;
+        std::tie(preferredSeq, preferredID) = trie_.getPreferred();
 
-        // Too early preferred ledger, or unknown id
-        if(seq < minValidSeq || id == ID{})
+        // Too early preferred ledger, or unknown id -> unknown preferred
+        if (preferredSeq < minValidSeq || preferredID == ID{})
             return ID{};
+
+        Seq currSeq = currLedger.seq();
+        ID currID = currLedger[currLedger.seq()];
+
+        // If we are the parent of the preferred ledger, stick with our current
+        // ledger since we might be working on that ledger
+        if (preferredSeq == currSeq + Seq{1})
+        {
+            for (auto const& it : lastLedger_)
+            {
+                Ledger const& ledger = it.second;
+                if (ledger.seq() == preferredSeq &&
+                    ledger[ledger.seq()] == preferredID &&
+                    ledger[currSeq] == currID)
+                    return currID;
+            }
+        }
 
         // A ledger ahead of us is preferred regardless of whether it is
         // a descendent of our working ledger or it is on a different chain
-        if(seq > ledger.seq())
-            return id;
+        if (preferredSeq > currSeq)
+            return preferredID;
 
         // Only switch to earlier sequence numbers if it is a different chain
         // to avoid jumping backward unnecessarily
-        if(ledger[seq] != id)
-            return id;
+        if (currLedger[preferredSeq] != preferredID)
+            return preferredID;
 
-        // Stay on the current ledger by default
-        return ledger[ledger.seq()];
-
+        // Stick with current ledger
+        return currID;
     }
 
     std::uint32_t

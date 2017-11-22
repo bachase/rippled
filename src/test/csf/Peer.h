@@ -604,7 +604,10 @@ struct Peer
             validations.getPreferred(ledger, earliestAllowedSeq());
 
         if (netLgr != ledgerID && netLgr != Ledger::ID{})
+        {
+            JLOG(j.trace()) << validations.getJsonTrie();
             issue(WrongPrevLedger{ledgerID, netLgr});
+        }
 
         return netLgr;
     }
