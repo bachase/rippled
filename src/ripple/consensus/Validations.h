@@ -557,8 +557,6 @@ public:
         repeat,
         /// Not current or was older than current from this node
         stale,
-        /// Had a validation with same sequence number
-        sameSeq,
         /// A validation was marked full but it violates increasing seq
         badFull
     };
@@ -719,7 +717,7 @@ public:
             ledgerID,
             [&](std::size_t) {}, // nothing to reserve
             [&](NodeKey const&, Validation const& v) {
-                if (v.trusted())
+                if (v.trusted() && v.isFull())
                     ++count;
             });
         return count;
@@ -738,7 +736,7 @@ public:
             ledgerID,
             [&](std::size_t numValidations) { res.reserve(numValidations); },
             [&](NodeKey const&, Validation const& v) {
-                if (v.trusted())
+                if (v.trusted() && v.isFull())
                     res.emplace_back(v.unwrap());
             });
 
@@ -758,7 +756,7 @@ public:
             ledgerID,
             [&](std::size_t numValidations) { times.reserve(numValidations); },
             [&](NodeKey const&, Validation const& v) {
-                if (v.trusted())
+                if (v.trusted() && v.isFull())
                     times.emplace_back(v.signTime());
             });
         return times;
@@ -778,7 +776,7 @@ public:
             ledgerID,
             [&](std::size_t numValidations) { res.reserve(numValidations); },
             [&](NodeKey const&, Validation const& v) {
-                if (v.trusted())
+                if (v.trusted() && v.isFull())
                 {
                     boost::optional<std::uint32_t> loadFee = v.loadFee();
                     if (loadFee)
