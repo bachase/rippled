@@ -332,6 +332,7 @@ handleNewValidation(Application& app,
             return false;
 
         // This validation replaced a prior one with the same sequence number
+#if 0
         if (res == AddOutcome::sameSeq)
         {
             auto const seq = val->getFieldU32(sfLedgerSequence);
@@ -340,7 +341,7 @@ handleNewValidation(Application& app,
                            << " published multiple validations for ledger "
                            << seq;
         }
-
+#endif
         JLOG(j.debug()) << "Val for " << hash << " from "
                     << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
                     << " added "
@@ -351,7 +352,7 @@ handleNewValidation(Application& app,
         // Trusted validations with sameSeq replaced an older validation
         // with that sequence number, so should still be checked and relayed.
         if (val->isTrusted() &&
-            (res == AddOutcome::current || res == AddOutcome::sameSeq))
+            (res == AddOutcome::current/* || res == AddOutcome::sameSeq*/))
         {
             app.getLedgerMaster().checkAccept(
                 hash, val->getFieldU32(sfLedgerSequence));

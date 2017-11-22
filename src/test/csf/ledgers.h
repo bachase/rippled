@@ -283,6 +283,57 @@ public:
 
 };
 
+/** Helper for writing unit tests with controlled ledger histories.
+
+    This class allows clients to refer to distinct ledgers as strings, where
+    each character in the string indicates a unique ledger. It enforces the
+    uniqueness at runtime, but this simplifies creation of alternate ledger
+    histories, e.g.
+
+     HistoryHelper hh;
+     hh["a"]
+     hh["ab"]
+     hh["ac"]
+     hh["abd"]
+
+   Creates a history like
+           b - d
+         /
+       a - c
+
+*/
+struct LedgerHistoryHelper
+{
+    csf::LedgerOracle oracle;
+    csf::Tx::ID nextTx{0};
+    std::unordered_map<std::string, csf::Ledger> ledgers;
+    std::set<char> seen;
+
+    LedgerHistoryHelper()
+    {
+        ledgers[""] = csf::Ledger{};
+    }
+
+    /** Get or create the ledger with the given string history.
+
+        Creates an necessary intermediate ledgers, but asserts if
+        a letter is re-used (e.g. "abc" then "adc" would assert)
+    */
+    csf::Ledger const& operator[](std::string const& s)
+    {
+        auto it = ledgers.find(s);
+        if (it != ledgers.end())
+            return it->second;
+
+        // enforce that the new suffix has never been seen
+        assert(seen.emplace(s.back()).second);
+
+        csf::Ledger const& parent = (*this)[s.substr(0, s.size() - 1)];
+        return ledgers.emplace(s, oracle.accept(parent, ++nextTx))
+            .first->second;
+    }
+};
+
 }  // csf
 }  // test
 }  // ripple

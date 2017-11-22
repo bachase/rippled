@@ -29,32 +29,6 @@ class LedgerTrie_test : public beast::unit_test::suite
 {
     beast::Journal j;
 
-    struct Helper
-    {
-        csf::LedgerOracle oracle;
-        csf::Tx::ID nextTx{0};
-        std::unordered_map<std::string, csf::Ledger> ledgers;
-        std::set<char> seen;
-
-        Helper()
-        {
-            ledgers[""] = csf::Ledger{};
-        }
-
-        csf::Ledger const& operator[](std::string const& s)
-        {
-            auto it = ledgers.find(s);
-            if (it != ledgers.end())
-                return it->second;
-
-            // enforce that the new suffix has never been seen
-            assert(seen.emplace(s.back()).second);
-
-            csf::Ledger const& parent = (*this)[s.substr(0, s.size() - 1)];
-            return ledgers.emplace(s, oracle.accept(parent, ++nextTx))
-                .first->second;
-        }
-    };
 
     void
     testInsert()
@@ -63,7 +37,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Single entry
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             BEAST_EXPECT(t.checkInvariants());
             BEAST_EXPECT(t.tipSupport(h["abc"]) == 1);
@@ -77,7 +51,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Suffix of existing (extending tree)
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             BEAST_EXPECT(t.checkInvariants());
             // extend with no siblings
@@ -101,7 +75,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Prefix of existing node
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abcd"]);
             BEAST_EXPECT(t.checkInvariants());
             // prefix with no siblings
@@ -127,7 +101,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Suffix + prefix
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abcd"]);
             BEAST_EXPECT(t.checkInvariants());
             t.insert(h["abce"]);
@@ -145,7 +119,7 @@ class LedgerTrie_test : public beast::unit_test::suite
             //  abcd : abcde, abcf
 
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abcd"]);
             BEAST_EXPECT(t.checkInvariants());
             t.insert(h["abcde"]);
@@ -166,7 +140,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Multiple
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["ab"],4);
             BEAST_EXPECT(t.tipSupport(h["ab"]) == 4);
             BEAST_EXPECT(t.branchSupport(h["ab"]) == 4);
@@ -191,7 +165,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Not in trie
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
 
             BEAST_EXPECT(!t.remove(h["ab"]));
@@ -202,7 +176,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // In trie but with 0 tip support
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abcd"]);
             t.insert(h["abce"]);
 
@@ -216,7 +190,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // In trie with > 1 tip support
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"],2);
 
             BEAST_EXPECT(t.tipSupport(h["abc"]) == 2);
@@ -240,7 +214,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // In trie with = 1 tip support, no children
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["ab"]);
             t.insert(h["abc"]);
 
@@ -259,7 +233,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // In trie with = 1 tip support, 1 child
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["ab"]);
             t.insert(h["abc"]);
             t.insert(h["abcd"]);
@@ -279,7 +253,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // In trie with = 1 tip support, > 1 children
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["ab"]);
             t.insert(h["abc"]);
             t.insert(h["abcd"]);
@@ -300,7 +274,7 @@ class LedgerTrie_test : public beast::unit_test::suite
     {
         using namespace csf;
         LedgerTrie<Ledger> t;
-        Helper h;
+        LedgerHistoryHelper h;
         BEAST_EXPECT(t.tipSupport(h["a"]) == 0);
         BEAST_EXPECT(t.tipSupport(h["axy"]) == 0);
         BEAST_EXPECT(t.branchSupport(h["a"]) == 0);
@@ -335,20 +309,20 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Empty
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             BEAST_EXPECT(t.getPreferred().second == Ledger::ID{0});
         }
         // Single node no children
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
         }
         // Single node smaller child support
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             t.insert(h["abcd"]);
             BEAST_EXPECT(t.getPreferred().second == h["abc"].id());
@@ -359,7 +333,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Single node larger child
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             t.insert(h["abcd"],2);
             BEAST_EXPECT(t.getPreferred().second == h["abcd"].id());
@@ -367,7 +341,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Single node smaller children support
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             t.insert(h["abcd"]);
             t.insert(h["abce"]);
@@ -379,7 +353,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Single node larger children
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             t.insert(h["abcd"],2);
             t.insert(h["abce"]);
@@ -390,7 +364,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Tie-breaker by id
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abcd"],2);
             t.insert(h["abce"],2);
 
@@ -405,7 +379,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Tie-breaker not needed
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             t.insert(h["abcd"]);
             t.insert(h["abce"],2);
@@ -422,7 +396,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Single node larger grand child
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             t.insert(h["abcd"],2);
             t.insert(h["abcde"],4);
@@ -432,7 +406,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // Too much prefix support from competing branches
         {
             LedgerTrie<Ledger> t;
-            Helper h;
+            LedgerHistoryHelper h;
             t.insert(h["abc"]);
             t.insert(h["abcde"],2);
             t.insert(h["abcfg"],2);
@@ -455,7 +429,7 @@ class LedgerTrie_test : public beast::unit_test::suite
         // invariant, do some tests that exercise it.
 
         LedgerTrie<Ledger> t;
-        Helper h;
+        LedgerHistoryHelper h;
         BEAST_EXPECT(!t.remove(h[""]));
         BEAST_EXPECT(t.branchSupport(h[""]) == 0);
         BEAST_EXPECT(t.tipSupport(h[""]) == 0);
