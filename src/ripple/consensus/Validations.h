@@ -273,6 +273,7 @@ public:
     std::uint32_t
     getNodesAfter(Ledger const & ledger, ID const & ledgerID)
     {
+        checkAcquired();
         // Use trie if ledger is the right one
         if(ledger[ledger.seq()] == ledgerID)
             return trie_.branchSupport(ledger) - trie_.tipSupport(ledger);
