@@ -582,95 +582,6 @@ class Validations_test : public beast::unit_test::suite
     }
 
     void
-    testCurrentTrustedDistribution()
-    {
-#if 0
-        // Test the trusted distribution calculation, including ledger slips
-        // and sequence cutoffs
-        using namespace std::chrono_literals;
-
-        TestHarness harness;
-
-        Node baby = harness.makeNode(), papa = harness.makeNode(),
-             mama = harness.makeNode(), goldilocks = harness.makeNode();
-        goldilocks.untrust();
-
-        // Stagger the validations around sequence 2
-        //  papa on seq 1 is behind
-        //  baby on seq 2 is just right
-        //  mama on seq 3 is ahead
-        //  goldilocks on seq 2, but is not trusted
-
-        for (auto const& node : {baby, papa, mama, goldilocks})
-            BEAST_EXPECT(AddOutcome::current ==
-                harness.add(node, Ledger::Seq{1}, Ledger::ID{1}));
-
-        harness.clock().advance(1s);
-        for (auto const& node : {baby, mama, goldilocks})
-            BEAST_EXPECT(AddOutcome::current ==
-                harness.add(node, Ledger::Seq{2}, Ledger::ID{2}));
-
-        harness.clock().advance(1s);
-        BEAST_EXPECT(AddOutcome::current ==
-            harness.add(mama, Ledger::Seq{3}, Ledger::ID{3}));
-
-        {
-            // Allow slippage that treats all trusted as the current ledger
-            auto res = harness.vals().currentTrustedDistribution(
-                Ledger::ID{2},    // Current ledger
-                Ledger::ID{1},    // Prior ledger
-                Ledger::Seq{0});  // No cutoff
-
-            BEAST_EXPECT(res.size() == 1);
-            BEAST_EXPECT(res[Ledger::ID{2}] == 3);
-            BEAST_EXPECT(
-                getPreferredLedger(Ledger::ID{2}, res) == Ledger::ID{2});
-        }
-
-        {
-            // Don't allow slippage back for prior ledger
-            auto res = harness.vals().currentTrustedDistribution(
-                Ledger::ID{2},    // Current ledger
-                Ledger::ID{0},    // No prior ledger
-                Ledger::Seq{0});  // No cutoff
-
-            BEAST_EXPECT(res.size() == 2);
-            BEAST_EXPECT(res[Ledger::ID{2}] == 2);
-            BEAST_EXPECT(res[Ledger::ID{1}] == 1);
-            BEAST_EXPECT(
-                getPreferredLedger(Ledger::ID{2}, res) == Ledger::ID{2});
-        }
-
-        {
-            // Don't allow any slips
-            auto res = harness.vals().currentTrustedDistribution(
-                Ledger::ID{0},    // No current ledger
-                Ledger::ID{0},    // No prior ledger
-                Ledger::Seq{0});  // No cutoff
-
-            BEAST_EXPECT(res.size() == 3);
-            BEAST_EXPECT(res[Ledger::ID{1}] == 1);
-            BEAST_EXPECT(res[Ledger::ID{2}] == 1);
-            BEAST_EXPECT(res[Ledger::ID{3}] == 1);
-            BEAST_EXPECT(
-                getPreferredLedger(Ledger::ID{0}, res) == Ledger::ID{3});
-        }
-
-        {
-            // Cutoff old sequence numbers
-            auto res = harness.vals().currentTrustedDistribution(
-                Ledger::ID{2},    // current ledger
-                Ledger::ID{1},    // prior ledger
-                Ledger::Seq{2});  // Only sequence 2 or later
-            BEAST_EXPECT(res.size() == 1);
-            BEAST_EXPECT(res[Ledger::ID{2}] == 2);
-            BEAST_EXPECT(
-                getPreferredLedger(Ledger::ID{2}, res) == Ledger::ID{2});
-        }
-#endif
-    }
-
-    void
     testTrustedByLedgerFunctions()
     {
         // Test the Validations functions that calculate a value by ledger ID
@@ -683,7 +594,7 @@ class Validations_test : public beast::unit_test::suite
         // verifying that the Validations member functions all calculate the
         // proper transformation of the available ledgers.
 
-         LedgerHistoryHelper h;
+        LedgerHistoryHelper h;
         TestHarness harness(h.oracle);
 
         Node a = harness.makeNode(), b = harness.makeNode(),
@@ -853,54 +764,86 @@ class Validations_test : public beast::unit_test::suite
     void
     testGetPreferredLedger()
     {
-#if 0
-        using Distribution = hash_map<Ledger::ID, std::uint32_t>;
+        using namespace std::chrono_literals;
+        testcase("Preferred Ledger");
 
-        {
-            Ledger::ID const current{1};
-            Distribution dist;
-            BEAST_EXPECT(getPreferredLedger(current, dist) == current);
-        }
+        LedgerHistoryHelper h;
+        TestHarness harness(h.oracle);
+        Node a = harness.makeNode(), b = harness.makeNode(),
+             c = harness.makeNode(), d = harness.makeNode();
+        c.untrust();
 
-        {
-            Ledger::ID const current{1};
-            Distribution dist;
-            dist[Ledger::ID{2}] = 2;
-            BEAST_EXPECT(getPreferredLedger(current, dist) == Ledger::ID{2});
-        }
+        Ledger ledgerA = h["a"];
+        Ledger ledgerB = h["b"];
+        Ledger ledgerAC = h["ac"];
+        Ledger ledgerACD = h["acd"];
 
-        {
-            Ledger::ID const current{1};
-            Distribution dist;
-            dist[Ledger::ID{1}] = 1;
-            dist[Ledger::ID{2}] = 2;
-            BEAST_EXPECT(getPreferredLedger(current, dist) == Ledger::ID{2});
-        }
+        using Seq = Ledger::Seq;
+        using ID = Ledger::ID;
 
-        {
-            Ledger::ID const current{1};
-            Distribution dist;
-            dist[Ledger::ID{1}] = 2;
-            dist[Ledger::ID{2}] = 2;
-            BEAST_EXPECT(getPreferredLedger(current, dist) == current);
-        }
+        // Empty (no ledgers)
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerA, Seq{0}) == ID{});
 
-        {
-            Ledger::ID const current{2};
-            Distribution dist;
-            dist[Ledger::ID{1}] = 2;
-            dist[Ledger::ID{2}] = 2;
-            BEAST_EXPECT(getPreferredLedger(current, dist) == current);
-        }
+        // Single ledger
+        BEAST_EXPECT(AddOutcome::current == harness.add(a, ledgerB));
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerA, Seq{0}) == ledgerB.id());
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerB, Seq{0}) == ledgerB.id());
 
-        {
-            Ledger::ID const current{1};
-            Distribution dist;
-            dist[Ledger::ID{2}] = 2;
-            dist[Ledger::ID{3}] = 2;
-            BEAST_EXPECT(getPreferredLedger(current, dist) == Ledger::ID{3});
-        }
-#endif
+        // Too early relative to minSeq
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerA, Seq{10}) == ID{});
+
+        // Untrusted doesn't impact preferred ledger
+        // (ledgerB has tie-break over ledgerA)
+        BEAST_EXPECT(AddOutcome::current == harness.add(b, ledgerA));
+        BEAST_EXPECT(AddOutcome::current == harness.add(c, ledgerA));
+        BEAST_EXPECT(ledgerB.id() > ledgerA.id());
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerA, Seq{0}) == ledgerB.id());
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerB, Seq{0}) == ledgerB.id());
+
+        // Partial does break ties
+        BEAST_EXPECT(AddOutcome::current == harness.add(d, d.partial(ledgerA)));
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerA, Seq{0}) == ledgerA.id());
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerB, Seq{0}) == ledgerA.id());
+
+        harness.clock().advance(5s);
+
+        // Parent of preferred-> stick with ledger
+        for(auto const & node : {a,b,c,d})
+            BEAST_EXPECT(AddOutcome::current == harness.add(node, ledgerAC));
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerA, Seq{0}) == ledgerA.id());
+        // Earlier different chain, switch
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerB, Seq{0}) == ledgerAC.id());
+        // Earlier same chain stays where it is
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerACD, Seq{0}) == ledgerACD.id());
+
+        // Any later grandchild or different chain is preferred
+        harness.clock().advance(5s);
+        for(auto const & node : {a,b,c,d})
+            BEAST_EXPECT(AddOutcome::current == harness.add(node, ledgerACD));
+        for (auto const& ledger : {ledgerA, ledgerB, ledgerACD})
+            BEAST_EXPECT(
+                harness.vals().getPreferred(ledger, Seq{0}) == ledgerACD.id());
+    }
+
+
+    void
+    testAcquireValidatedLedger()
+    {
+        testcase("Acquire validated ledger");
+        pass();
+        // Test that acquire request is made
+        // Test that future calls use ledger when it is available
+        // Test that new validation will ignore ledgers that were not able
+        // to be acquired
     }
 
     void
@@ -911,11 +854,11 @@ class Validations_test : public beast::unit_test::suite
         testGetNodesAfter();
         testCurrentTrusted();
         testGetCurrentPublicKeys();
-        testCurrentTrustedDistribution();
         testTrustedByLedgerFunctions();
         testExpire();
         testFlush();
         testGetPreferredLedger();
+        testAcquireValidatedLedger();
     }
 };
 
