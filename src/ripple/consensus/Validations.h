@@ -115,7 +115,6 @@ isCurrent(
     In order to determine ledger history, the Ledger validated is needed to
     query the ids of its ancestors.
 
-    // TODO: partial
     // TODO: stale?
     // TODO: untrusted?
 */
@@ -251,7 +250,7 @@ public:
             {
                 Ledger const& ledger = it.second;
                 if (ledger.seq() == preferredSeq &&
-                    ledger[ledger.seq()] == preferredID &&
+                    ledger[preferredSeq] == preferredID &&
                     ledger[currSeq] == currID)
                     return currID;
             }
@@ -415,7 +414,7 @@ class Validations
     // Manages concurrent access to current_ and byLedger_
     mutable Mutex mutex_;
 
-    //! Preferred trie from currently trusted nodes (partial and full vals)
+    //! Preferred trie from currently trusted nodes (partial and full)
     Preferred<Adaptor> preferred_;
 
     //! Validations from currently listed and trusted nodes (partial and full)
@@ -659,6 +658,9 @@ public:
         @param ledgerID The preferred ledger
         @return The number of current trusted validators working on a descendent
                 of the preferred ledger
+
+        @note If ledger.id() != ledgerID, only counts immediate child ledgers of
+              ledgerID
     */
     std::size_t
     getNodesAfter(Ledger const& ledger, ID const & ledgerID)
