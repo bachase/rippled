@@ -889,7 +889,7 @@ class Validations_test : public beast::unit_test::suite
         BEAST_EXPECT(
             harness.vals().getPreferred(Ledger{}, Seq{}) == ledgerAB.id());
 
-        // Switch too validation that is available
+        // Switch to validation that is available
         harness.clock().advance(5s);
         Ledger ledgerABC = h["abc"];
         BEAST_EXPECT(AddOutcome::current == harness.add(a.partial(ledgerABC)));
