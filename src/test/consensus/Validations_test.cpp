@@ -113,13 +113,14 @@ class Validations_test : public beast::unit_test::suite
         // with signing and seen times offset from the common clock
         Validation
         validate(
-            Ledger ledger,
+            Ledger::ID id,
+            Ledger::Seq seq,
             NetClock::duration signOffset,
             NetClock::duration seenOffset,
-            bool full = true) const
+            bool full) const
         {
-            Validation v{ledger.id(),
-                         ledger.seq(),
+            Validation v{id,
+                         seq,
                          now() + signOffset,
                          now() + seenOffset,
                          currKey(),
@@ -131,19 +132,40 @@ class Validations_test : public beast::unit_test::suite
             return v;
         }
 
-        // Issue a new validation with the given sequence number and id
+        Validation
+        validate(
+            Ledger ledger,
+            NetClock::duration signOffset,
+            NetClock::duration seenOffset) const
+        {
+            return validate(
+                ledger.id(),
+                ledger.seq(),
+                signOffset,
+                seenOffset,
+                true);
+        }
+
         Validation
         validate(Ledger ledger) const
         {
             return validate(
-                ledger, NetClock::duration{0}, NetClock::duration{0}, true);
+                ledger.id(),
+                ledger.seq(),
+                NetClock::duration{0},
+                NetClock::duration{0},
+                true);
         }
 
         Validation
         partial(Ledger ledger) const
         {
             return validate(
-                ledger, NetClock::duration{0}, NetClock::duration{0}, false);
+                ledger.id(),
+                ledger.seq(),
+                NetClock::duration{0},
+                NetClock::duration{0},
+                false);
         }
     };
 
@@ -835,12 +857,44 @@ class Validations_test : public beast::unit_test::suite
     void
     testAcquireValidatedLedger()
     {
+        using namespace std::chrono_literals;
         testcase("Acquire validated ledger");
-        pass();
-        // Test that acquire request is made
-        // Test that future calls use ledger when it is available
-        // Test that new validation will ignore ledgers that were not able
-        // to be acquired
+
+        LedgerHistoryHelper h;
+        TestHarness harness(h.oracle);
+        Node a = harness.makeNode();
+
+        using ID = Ledger::ID;
+        using Seq = Ledger::Seq;
+
+        // Validate the ledger before it is actually available
+        Validation val = a.validate(ID{2}, Seq{2}, 0s, 0s, true);
+
+        BEAST_EXPECT(AddOutcome::current == harness.add(val));
+        // Validation is available
+        BEAST_EXPECT(harness.vals().numTrustedForLedger(ID{2}) == 1);
+        // but ledger based data is not
+        BEAST_EXPECT(harness.vals().getNodesAfter(Ledger{}, ID{0}) == 0);
+
+        // Create the ledger
+        Ledger ledgerAB = h["ab"];
+        // Now it should be available
+        BEAST_EXPECT(harness.vals().getNodesAfter(Ledger{}, ID{0}) == 1);
+
+        // Create a validation that is not available
+        harness.clock().advance(5s);
+        Validation val2 = a.validate(ID{5}, Seq{5}, 0s, 0s, true);
+        BEAST_EXPECT(AddOutcome::current == harness.add(val2));
+        BEAST_EXPECT(harness.vals().numTrustedForLedger(ID{5}) == 1);
+        BEAST_EXPECT(
+            harness.vals().getPreferred(Ledger{}, Seq{}) == ledgerAB.id());
+
+        // Switch too validation that is available
+        harness.clock().advance(5s);
+        Ledger ledgerABC = h["abc"];
+        BEAST_EXPECT(AddOutcome::current == harness.add(a.partial(ledgerABC)));
+        BEAST_EXPECT(
+            harness.vals().getPreferred(Ledger{}, Seq{0}) == ledgerABC.id());
     }
 
     void
