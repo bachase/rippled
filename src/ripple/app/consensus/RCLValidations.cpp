@@ -273,98 +273,61 @@ handleNewValidation(Application& app,
     STValidation::ref val,
     std::string const& source)
 {
-    PublicKey const& signer = val->getSignerPublic();
+    PublicKey const& signingKey = val->getSignerPublic();
     uint256 const& hash = val->getLedgerHash();
 
     // Ensure validation is marked as trusted if signer currently trusted
-    boost::optional<PublicKey> pubKey = app.validators().getTrustedKey(signer);
-    if (!val->isTrusted() && pubKey)
+    boost::optional<PublicKey> masterKey =
+        app.validators().getTrustedKey(signingKey);
+    if (!val->isTrusted() && masterKey)
         val->setTrusted();
-    RCLValidations& validations  = app.getValidations();
-
-    beast::Journal j = validations.journal();
-
-    // Do not process partial validations.
-    if (!val->isFull())
-    {
-        const bool current = isCurrent(
-            validations.parms(),
-            app.timeKeeper().closeTime(),
-            val->getSignTime(),
-            val->getSeenTime());
-
-        JLOG(j.debug()) << "Val (partial) for " << hash << " from "
-                         << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
-                         << " ignored "
-                         << (val->isTrusted() ? "trusted/" : "UNtrusted/")
-                         << (current ? "current" : "stale");
-
-        // Only forward if current and trusted
-        return current && val->isTrusted();
-    }
-
-    if (!val->isTrusted())
-    {
-        JLOG(j.trace()) << "Node "
-                        << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
-                        << " not in UNL st="
-                        << val->getSignTime().time_since_epoch().count()
-                        << ", hash=" << hash
-                        << ", shash=" << val->getSigningHash()
-                        << " src=" << source;
-    }
 
     // If not currently trusted, see if signer is currently listed
-    if (!pubKey)
-        pubKey = app.validators().getListedKey(signer);
+    if (!masterKey)
+        masterKey = app.validators().getListedKey(signingKey);
 
     bool shouldRelay = false;
+    RCLValidations& validations = app.getValidations();
+    beast::Journal j = validations.journal();
 
-    // only add trusted or listed
-    if (pubKey)
+    // masterKey is seated only if validator is trusted or listed
+    if (masterKey)
     {
-        using AddOutcome = RCLValidations::AddOutcome;
+        ValStatus const outcome = validations.add(*masterKey, val);
 
-        AddOutcome const res = validations.add(*pubKey, val);
+        auto dmp = [&](beast::Journal::Stream& s, std::string const& msg) {
+            s << "Val for " << hash
+              << (val->isTrusted() ? " trusted/" : " UNtrusted/")
+              << (val->isFull() ? " full" : "partial") << " from "
+              << toBase58(TokenType::TOKEN_NODE_PUBLIC, *masterKey)
+              << "signing key "
+              << toBase58(TokenType::TOKEN_NODE_PUBLIC, signingKey) << " "
+              << msg;
+        };
 
-        // This is a duplicate validation
-        if (res == AddOutcome::repeat)
-            return false;
+        if(j.debug())
+            dmp(j.debug(), to_string(outcome));
 
-        // This validation replaced a prior one with the same sequence number
-#if 0
-        if (res == AddOutcome::sameSeq)
+        if(outcome == ValStatus::badFullSeq && j.warn())
         {
             auto const seq = val->getFieldU32(sfLedgerSequence);
-            JLOG(j.warn()) << "Trusted node "
-                           << toBase58(TokenType::TOKEN_NODE_PUBLIC, *pubKey)
-                           << " published multiple validations for ledger "
-                           << seq;
+            dmp(j.warn(), " already fully validated sequence past " + to_string(seq));
         }
-#endif
-        JLOG(j.debug()) << "Val for " << hash << " from "
-                    << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
-                    << " added "
-                    << (val->isTrusted() ? "trusted/" : "UNtrusted/")
-                    << ((res == AddOutcome::current) ? "current" : "stale");
 
-        // Trusted current validations should be checked and relayed.
-        // Trusted validations with sameSeq replaced an older validation
-        // with that sequence number, so should still be checked and relayed.
-        if (val->isTrusted() &&
-            (res == AddOutcome::current/* || res == AddOutcome::sameSeq*/))
+        if (val->isTrusted() && outcome == ValStatus::current)
         {
             app.getLedgerMaster().checkAccept(
                 hash, val->getFieldU32(sfLedgerSequence));
 
             shouldRelay = true;
         }
+
     }
     else
     {
         JLOG(j.debug()) << "Val for " << hash << " from "
-                    << toBase58(TokenType::TOKEN_NODE_PUBLIC, signer)
-                    << " not added UNtrusted/";
+                    << toBase58(TokenType::TOKEN_NODE_PUBLIC, signingKey)
+                    << " not added UNlisted";
     }
 
     // This currently never forwards untrusted validations, though we may

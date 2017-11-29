@@ -104,6 +104,36 @@ isCurrent(
          (seenTime < (now + p.validationCURRENT_LOCAL)));
 }
 
+/** Status of newly received validation
+ */
+enum class ValStatus {
+    /// This was a new validation and was added
+    current,
+    /// Already had this exact same validation
+    repeat,
+    /// Not current or was older than current from this node
+    stale,
+    /// A validation was marked full but it violates increasing seq requirement
+    badFullSeq
+};
+
+inline std::string
+to_string(ValStatus m)
+{
+    switch (m)
+    {
+        case ValStatus::current:
+            return "current";
+        case ValStatus::repeat:
+            return "repeat";
+        case ValStatus::stale:
+            return "stale";
+        case ValStatus::badFullSeq:
+            return "badFullSeq";
+        default:
+            return "unknown";
+    }
+}
 
 /** Maintains the ledger trie for the lastest validations.
 
@@ -452,20 +482,6 @@ public:
         return j_;
     }
 
-    /** Result of adding a new validation
-     */
-    enum class AddOutcome {
-        /// This was a new validation and was added
-        current,
-        /// Already had this exact same validation
-        repeat,
-        /// Not current or was older than current from this node
-        stale,
-        /// A validation was marked full but it violates increasing seq
-        badFull
-    };
-
-
     /** Add a new validation
 
         Attempt to add a new validation.
@@ -477,11 +493,11 @@ public:
         @note The provided key may differ from the validations's  key()
               member if the validator is using ephemeral signing keys.
     */
-    AddOutcome
+    ValStatus
     add(NodeKey const& key, Validation const& val)
     {
         if (!isCurrent(parms_, adaptor_.now(), val.signTime(), val.seenTime()))
-            return AddOutcome::stale;
+            return ValStatus::stale;
 
         {
             ScopedLock lock{mutex_};
@@ -493,7 +509,7 @@ public:
                 if (!ins.second)
                 {
                     if (val.seq() <= ins.first->second)
-                        return AddOutcome::badFull;
+                        return ValStatus::badFullSeq;
                     ins.first->second = val.seq();
                 }
             }
@@ -502,7 +518,7 @@ public:
             // one with the same id for this key
             auto const ret = byLedger_[val.ledgerID()].emplace(key, val);
             if (!ret.second && ret.first->second.key() == val.key())
-                return AddOutcome::repeat;
+                return ValStatus::repeat;
 
             auto const ins = current_.emplace(key, val);
             if (!ins.second)
@@ -518,14 +534,14 @@ public:
                         updateTrie(key, val, oldID);
                 }
                 else
-                    return AddOutcome::stale;
+                    return ValStatus::stale;
             }
             else if (val.trusted())
             {
                 updateTrie(key, val, boost::none);
             }
         }
-        return AddOutcome::current;
+        return ValStatus::current;
     }
 
     /** Expire old validation sets
@@ -779,5 +795,6 @@ public:
         JLOG(j_.debug()) << "Validations flushed";
     }
 };
+
 }  // namespace ripple
 #endif
