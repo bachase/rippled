@@ -1,7 +1,7 @@
 //------------------------------------------------------------------------------
 /*
     This file is part of rippled: https://github.com/ripple/rippled
-    Copyright (c) 2012, 2013 Ripple Labs Inc.
+    Copyright (c) 2017 Ripple Labs Inc.
 
     Permission to use, copy, modify, and/or distribute this software for any
     purpose  with  or without fee is hereby granted, provided that the above
@@ -32,7 +32,10 @@
 namespace ripple {
 
 void
-registerSSLCerts(boost::asio::ssl::context& ctx, boost::system::error_code& ec)
+registerSSLCerts(
+    boost::asio::ssl::context& ctx,
+    boost::system::error_code& ec,
+    beast::Journal j)
 {
 #if BOOST_OS_WINDOWS
     auto certStoreDelete = [](void* h) {
@@ -62,6 +65,14 @@ registerSSLCerts(boost::asio::ssl::context& ctx, boost::system::error_code& ec)
         return;
     }
 
+    auto warn = [&](std::string const& mesg) {
+        // Buffer based on asio recommended size
+        char buf[256];
+        ::ERR_error_string_n(ec.value(), buf, sizeof(buf));
+        JLOG(j.warn()) << mesg << " " << buf;
+        ::ERR_clear_error();
+    };
+
     PCCERT_CONTEXT pContext = NULL;
     while ((pContext = CertEnumCertificatesInStore(hStore.get(), pContext)) !=
            NULL)
@@ -71,18 +82,13 @@ registerSSLCerts(boost::asio::ssl::context& ctx, boost::system::error_code& ec)
             d2i_X509(NULL, &pbCertEncoded, pContext->cbCertEncoded), X509_free};
         if (!x509)
         {
-            ec = boost::system::error_code(
-                static_cast<int>(::ERR_get_error()),
-                boost::asio::error::get_ssl_category());
-            return;
+            warn("Error decoding certificate");
+            continue;
         }
 
         if (X509_STORE_add_cert(store.get(), x509.get()) != 1)
         {
-            ec = boost::system::error_code(
-                static_cast<int>(::ERR_get_error()),
-                boost::asio::error::get_ssl_category());
-            return;
+            warn("Error adding certificate");
         }
         else
         {

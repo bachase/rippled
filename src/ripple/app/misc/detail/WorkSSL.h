@@ -34,11 +34,11 @@ namespace detail {
 class SSLContext : public boost::asio::ssl::context
 {
 public:
-    SSLContext()
+    SSLContext(beast::Journal j)
     : boost::asio::ssl::context(boost::asio::ssl::context::sslv23)
     {
         boost::system::error_code ec;
-        registerSSLCerts(*this, ec);
+        registerSSLCerts(*this, ec, j);
         if (ec)
         {
             Throw<std::runtime_error> (
@@ -64,8 +64,11 @@ private:
 public:
     WorkSSL(
         std::string const& host,
-        std::string const& path, std::string const& port,
-        boost::asio::io_service& ios, callback_type cb);
+        std::string const& path,
+        std::string const& port,
+        boost::asio::io_service& ios,
+        beast::Journal j,
+        callback_type cb);
     ~WorkSSL() = default;
 
 private:
@@ -95,11 +98,14 @@ private:
 
 WorkSSL::WorkSSL(
     std::string const& host,
-    std::string const& path, std::string const& port,
-    boost::asio::io_service& ios, callback_type cb)
-    : WorkBase (host, path, port, ios, cb)
-    , context_()
-    , stream_ (socket_, context_)
+    std::string const& path,
+    std::string const& port,
+    boost::asio::io_service& ios,
+    beast::Journal j,
+    callback_type cb)
+    : WorkBase(host, path, port, ios, cb)
+    , context_(j)
+    , stream_(socket_, context_)
 {
     // Set SNI hostname
     SSL_set_tlsext_host_name(stream_.native_handle(), host.c_str());

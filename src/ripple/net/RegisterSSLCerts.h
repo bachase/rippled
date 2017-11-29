@@ -21,6 +21,7 @@
 #define RIPPLE_NET_REGISTER_SSL_CERTS_H_INCLUDED
 
 #include <boost/asio/ssl/context.hpp>
+#include <ripple/basics/Log.h>
 
 namespace ripple {
 /** Register default SSL certificates.
@@ -31,7 +32,10 @@ namespace ripple {
     store accessible via CryptoAPI.
 */
 void
-registerSSLCerts(boost::asio::ssl::context&, boost::system::error_code&);
+registerSSLCerts(
+    boost::asio::ssl::context&,
+    boost::system::error_code&,
+    beast::Journal j);
 
 }  // namespace ripple
 

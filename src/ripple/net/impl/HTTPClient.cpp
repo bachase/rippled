@@ -41,7 +41,7 @@ class HTTPClientSSLContext
 {
 public:
     explicit
-    HTTPClientSSLContext (Config const& config)
+    HTTPClientSSLContext (Config const& config, beast::Journal j)
         : m_context (boost::asio::ssl::context::sslv23)
         , verify_ (config.SSL_VERIFY)
     {
@@ -49,7 +49,7 @@ public:
 
         if (config.SSL_VERIFY_FILE.empty ())
         {
-            registerSSLCerts(m_context, ec);
+            registerSSLCerts(m_context, ec, j);
 
             if (ec && config.SSL_VERIFY_DIR.empty ())
                 Throw<std::runtime_error> (
@@ -90,9 +90,9 @@ private:
 
 boost::optional<HTTPClientSSLContext> httpClientSSLContext;
 
-void HTTPClient::initializeSSLContext (Config const& config)
+void HTTPClient::initializeSSLContext (Config const& config, beast::Journal j)
 {
-    httpClientSSLContext.emplace (config);
+    httpClientSSLContext.emplace (config, j);
 }
 
 //------------------------------------------------------------------------------
