@@ -437,22 +437,49 @@ class Validations_test : public beast::unit_test::suite
     testOnStale()
     {
         testcase("Stale validation");
-        // Verify validation becomes stale based solely on time passing
+        // Verify validation becomes stale based solely on time passing, but
+        // use different functions to trigger the check for staleness
+
         LedgerHistoryHelper h;
-        TestHarness harness(h.oracle);
-        Node n = harness.makeNode();
         Ledger ledgerA = h["a"];
+        Ledger ledgerAB = h["ab"];
 
-        BEAST_EXPECT(ValStatus::current == harness.add(n.validate(ledgerA)));
-        harness.vals().currentTrusted();
-        BEAST_EXPECT(harness.stale().empty());
-        harness.clock().advance(harness.parms().validationCURRENT_LOCAL);
+        using Trigger = std::function<void(TestValidations&)>;
+        std::vector<Trigger> triggers = {
+            [&](TestValidations& vals) { vals.currentTrusted(); },
+            [&](TestValidations& vals) {
+                vals.getPreferred(Ledger{}, Ledger::Seq{0});
+            },
+            [&](TestValidations& vals) {
+                vals.getNodesAfter(ledgerA, ledgerA.id());
+            }};
+        for(Trigger trigger : triggers)
+        {
+            TestHarness harness(h.oracle);
+            Node n = harness.makeNode();
 
-        // trigger iteration over current
-        harness.vals().currentTrusted();
+            BEAST_EXPECT(
+                ValStatus::current == harness.add(n.validate(ledgerAB)));
+            harness.vals().currentTrusted();
+            BEAST_EXPECT(
+                harness.vals().getNodesAfter(ledgerA, ledgerA.id()) == 1);
+            BEAST_EXPECT(
+                harness.vals().getPreferred(Ledger{}, Ledger::Seq{0}) ==
+                ledgerAB.id());
+            BEAST_EXPECT(harness.stale().empty());
+            harness.clock().advance(harness.parms().validationCURRENT_LOCAL);
 
-        BEAST_EXPECT(harness.stale().size() == 1);
-        BEAST_EXPECT(harness.stale()[0].ledgerID() == ledgerA.id());
+            // trigger check for stale
+            trigger(harness.vals());
+
+            BEAST_EXPECT(harness.stale().size() == 1);
+            BEAST_EXPECT(harness.stale()[0].ledgerID() == ledgerAB.id());
+            BEAST_EXPECT(
+                harness.vals().getNodesAfter(ledgerA, ledgerA.id()) == 0);
+            BEAST_EXPECT(
+                harness.vals().getPreferred(Ledger{}, Ledger::Seq{0}) ==
+                Ledger::ID{0});
+        }
     }
 
     void
