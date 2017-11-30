@@ -541,8 +541,8 @@ public:
                     curr->children.end(),
                     [](std::unique_ptr<Node> const& a,
                        std::unique_ptr<Node> const& b) {
-                        return std::tie(a->branchSupport, a->span.startID()) >
-                            std::tie(b->branchSupport, b->span.startID());
+                        return std::make_tuple(a->branchSupport, a->span.startID()) >
+                            std::make_tuple(b->branchSupport, b->span.startID());
                     });
 
                 best = curr->children[0].get();
@@ -561,7 +561,7 @@ public:
                 // Prefix support is all the support not on the branch we
                 // are moving to
                 //       curr
-                //     /  |  \
+                //    _/  |  \_
                 //    A   B  best
                 // At curr, the prefix support already includes the tip support
                 // of curr and its ancestors, along with the branch support of

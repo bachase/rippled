@@ -300,7 +300,7 @@ handleNewValidation(Application& app,
     {
         ValStatus const outcome = validations.add(*masterKey, val);
 
-        auto dmp = [&](beast::Journal::Stream& s, std::string const& msg) {
+        auto dmp = [&](beast::Journal::Stream s, std::string const& msg) {
             s << "Val for " << hash
               << (val->isTrusted() ? " trusted/" : " UNtrusted/")
               << (val->isFull() ? " full" : "partial") << " from "
