@@ -87,7 +87,8 @@ namespace ripple {
        @endcode
 
     The unique history invariant of ledgers requires any ledgers that agree
-    on the id of a given sequence number agree on ALL ancestors before that ledger
+    on the id of a given sequence number agree on ALL ancestors before that
+    ledger:
 
         @code
         Ledger a,b;
@@ -97,7 +98,7 @@ namespace ripple {
                 assert(a[p] == b[p]);
         @endcode
 
-    @tparam Ledger A type representing a specific history of ledgers
+    @tparam Ledger A type representing a ledger and its history
 */
 template <class Ledger>
 class LedgerTrie
@@ -105,7 +106,6 @@ class LedgerTrie
     using Seq = typename Ledger::Seq;
     using ID = typename Ledger::ID;
 
-    // Span of a ledger
     class Span
     {
         // The span is the half-open interval [start,end) of ledger_
@@ -284,7 +284,7 @@ class LedgerTrie
     // invariant.
     std::unique_ptr<Node> root;
 
-    /** Find the node in the trie that represents the longest common ancetry
+    /** Find the node in the trie that represents the longest common ancestry
         with the given ledger.
 
         @return Pair of the found node and the sequence number of the first
@@ -413,7 +413,7 @@ public:
         @param ledger The ledger history to remove
         @param count The amount of tip support to remove
 
-        @return Whether a node was erased as a result
+        @return Whether a matching node was decremented and possibly removed.
     */
     bool
     remove(Ledger const& ledger, std::uint32_t count = 1)
@@ -534,7 +534,7 @@ public:
             else if (!curr->children.empty())
             {
                 // Sort placing children with largest branch support in the
-                // front, breaking ties with the span's starting ID then tip
+                // front, breaking ties with the span's starting ID
                 std::partial_sort(
                     curr->children.begin(),
                     curr->children.begin() + 2,
