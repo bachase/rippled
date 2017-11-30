@@ -49,6 +49,11 @@ RCLValidatedLedger::seq() const -> Seq
 {
     return ledger_ ? ledger_->info().seq : Seq{0};
 }
+auto
+RCLValidatedLedger::id() const -> ID
+{
+    return ledger_ ? ledger_->info().hash : ID{0};
+}
 
 auto
 RCLValidatedLedger::operator[](Seq const & s) const -> ID

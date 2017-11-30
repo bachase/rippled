@@ -142,7 +142,7 @@ public:
     static constexpr Seq maxAncestors{256};
 
     RCLValidatedLedger() = default;
-    
+
     RCLValidatedLedger(std::shared_ptr<Ledger const> ledger, beast::Journal j)
         : ledger_{std::move(ledger)}, j_{j}
     {
@@ -155,6 +155,9 @@ public:
     minSeq() const;
 
     ID operator[](Seq const& s) const;
+
+    ID
+    id() const;
 
     friend Seq
     mismatch(RCLValidatedLedger const& a, RCLValidatedLedger const& b);
