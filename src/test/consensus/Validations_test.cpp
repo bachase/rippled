@@ -922,6 +922,23 @@ class Validations_test : public beast::unit_test::suite
     }
 
     void
+    testNumTrustedForLedger()
+    {
+        testcase("NumTrustedForLedger");
+        LedgerHistoryHelper h;
+        TestHarness harness(h.oracle);
+        Node a = harness.makeNode();
+        Node b = harness.makeNode();
+        Ledger ledgerA = h["a"];
+
+        BEAST_EXPECT(ValStatus::current == harness.add(a.partial(ledgerA)));
+        BEAST_EXPECT(harness.vals().numTrustedForLedger(ledgerA.id()) == 0);
+
+        BEAST_EXPECT(ValStatus::current == harness.add(b.validate(ledgerA)));
+        BEAST_EXPECT(harness.vals().numTrustedForLedger(ledgerA.id()) == 1);
+    }
+
+    void
     run() override
     {
         testAddValidation();
@@ -934,6 +951,7 @@ class Validations_test : public beast::unit_test::suite
         testFlush();
         testGetPreferredLedger();
         testAcquireValidatedLedger();
+        testNumTrustedForLedger();
     }
 };
 
