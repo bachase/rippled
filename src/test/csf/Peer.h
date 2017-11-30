@@ -516,7 +516,6 @@ struct Peer
     {
         schedule(delays.ledgerAccept, [=]() {
             const bool proposing = mode == ConsensusMode::proposing;
-            const bool haveCorrectLCL = mode != ConsensusMode::wrongLedger;
             const bool consensusFail = result.state == ConsensusState::MovedOn;
 
             TxSet const acceptedTxs = injectTxs(prevLedger, result.set);
