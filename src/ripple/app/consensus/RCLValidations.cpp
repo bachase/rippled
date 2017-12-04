@@ -237,6 +237,9 @@ RCLValidationsAdaptor::doStaleWrite(ScopedLockType&)
                 soci::transaction tr(*db);
                 for (RCLValidation const& wValidation : currentStale)
                 {
+                    // Only save full validations until we update the schema
+                    if(!wValidation.isFull())
+                        continue;
                     s.erase();
                     STValidation::pointer const& val = wValidation.unwrap();
                     val->add(s);
