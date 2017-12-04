@@ -448,7 +448,7 @@ class Validations_test : public beast::unit_test::suite
         std::vector<Trigger> triggers = {
             [&](TestValidations& vals) { vals.currentTrusted(); },
             [&](TestValidations& vals) {
-                vals.getPreferred(Ledger{}, Ledger::Seq{0});
+                vals.getPreferred(Ledger{});
             },
             [&](TestValidations& vals) {
                 vals.getNodesAfter(ledgerA, ledgerA.id());
@@ -464,8 +464,8 @@ class Validations_test : public beast::unit_test::suite
             BEAST_EXPECT(
                 harness.vals().getNodesAfter(ledgerA, ledgerA.id()) == 1);
             BEAST_EXPECT(
-                harness.vals().getPreferred(Ledger{}, Ledger::Seq{0}) ==
-                ledgerAB.id());
+                harness.vals().getPreferred(Ledger{}) ==
+                std::make_pair(ledgerAB.seq(), ledgerAB.id()));
             BEAST_EXPECT(harness.stale().empty());
             harness.clock().advance(harness.parms().validationCURRENT_LOCAL);
 
@@ -477,8 +477,8 @@ class Validations_test : public beast::unit_test::suite
             BEAST_EXPECT(
                 harness.vals().getNodesAfter(ledgerA, ledgerA.id()) == 0);
             BEAST_EXPECT(
-                harness.vals().getPreferred(Ledger{}, Ledger::Seq{0}) ==
-                Ledger::ID{0});
+                harness.vals().getPreferred(Ledger{}) ==
+                std::make_pair(Ledger::Seq{0}, Ledger::ID{0}));
         }
     }
 
@@ -823,35 +823,33 @@ class Validations_test : public beast::unit_test::suite
         using Seq = Ledger::Seq;
         using ID = Ledger::ID;
 
+        auto pref = [](Ledger ledger) {
+            return std::make_pair(ledger.seq(), ledger.id()); };
+
         // Empty (no ledgers)
-        BEAST_EXPECT(harness.vals().getPreferred(ledgerA, Seq{0}) == ID{});
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerA) == pref(Ledger{}));
 
         // Single ledger
         BEAST_EXPECT(ValStatus::current == harness.add(a.validate(ledgerB)));
-        BEAST_EXPECT(
-            harness.vals().getPreferred(ledgerA, Seq{0}) == ledgerB.id());
-        BEAST_EXPECT(
-            harness.vals().getPreferred(ledgerB, Seq{0}) == ledgerB.id());
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerA) == pref(ledgerB));
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerB) == pref(ledgerB));
 
-        // Too early relative to minSeq
-        BEAST_EXPECT(harness.vals().getPreferred(ledgerA, Seq{10}) == ID{});
+        // Minimum valid sequence
+        BEAST_EXPECT(
+            harness.vals().getPreferred(ledgerA, Seq{10}) == ledgerA.id());
 
         // Untrusted doesn't impact preferred ledger
         // (ledgerB has tie-break over ledgerA)
         BEAST_EXPECT(ValStatus::current == harness.add(b.validate(ledgerA)));
         BEAST_EXPECT(ValStatus::current == harness.add(c.validate(ledgerA)));
         BEAST_EXPECT(ledgerB.id() > ledgerA.id());
-        BEAST_EXPECT(
-            harness.vals().getPreferred(ledgerA, Seq{0}) == ledgerB.id());
-        BEAST_EXPECT(
-            harness.vals().getPreferred(ledgerB, Seq{0}) == ledgerB.id());
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerA) == pref(ledgerB));
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerB) == pref(ledgerB));
 
         // Partial does break ties
         BEAST_EXPECT(ValStatus::current == harness.add(d.partial(ledgerA)));
-        BEAST_EXPECT(
-            harness.vals().getPreferred(ledgerA, Seq{0}) == ledgerA.id());
-        BEAST_EXPECT(
-            harness.vals().getPreferred(ledgerB, Seq{0}) == ledgerA.id());
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerA) == pref(ledgerA));
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerB) == pref(ledgerA));
 
         harness.clock().advance(5s);
 
@@ -859,14 +857,11 @@ class Validations_test : public beast::unit_test::suite
         for (auto const& node : {a, b, c, d})
             BEAST_EXPECT(
                 ValStatus::current == harness.add(node.validate(ledgerAC)));
-        BEAST_EXPECT(
-            harness.vals().getPreferred(ledgerA, Seq{0}) == ledgerA.id());
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerA) == pref(ledgerA));
         // Earlier different chain, switch
-        BEAST_EXPECT(
-            harness.vals().getPreferred(ledgerB, Seq{0}) == ledgerAC.id());
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerB) == pref(ledgerAC));
         // Earlier same chain stays where it is
-        BEAST_EXPECT(
-            harness.vals().getPreferred(ledgerACD, Seq{0}) == ledgerACD.id());
+        BEAST_EXPECT(harness.vals().getPreferred(ledgerACD) == pref(ledgerACD));
 
         // Any later grandchild or different chain is preferred
         harness.clock().advance(5s);
@@ -875,7 +870,7 @@ class Validations_test : public beast::unit_test::suite
                 ValStatus::current == harness.add(node.validate(ledgerACD)));
         for (auto const& ledger : {ledgerA, ledgerB, ledgerACD})
             BEAST_EXPECT(
-                harness.vals().getPreferred(ledger, Seq{0}) == ledgerACD.id());
+                harness.vals().getPreferred(ledger) == pref(ledgerACD));
     }
 
     void
@@ -911,14 +906,16 @@ class Validations_test : public beast::unit_test::suite
         BEAST_EXPECT(ValStatus::current == harness.add(val2));
         BEAST_EXPECT(harness.vals().numTrustedForLedger(ID{5}) == 1);
         BEAST_EXPECT(
-            harness.vals().getPreferred(Ledger{}, Seq{}) == ledgerAB.id());
+            harness.vals().getPreferred(Ledger{}) ==
+            std::make_pair(ledgerAB.seq(), ledgerAB.id()));
 
         // Switch to validation that is available
         harness.clock().advance(5s);
         Ledger ledgerABC = h["abc"];
         BEAST_EXPECT(ValStatus::current == harness.add(a.partial(ledgerABC)));
         BEAST_EXPECT(
-            harness.vals().getPreferred(Ledger{}, Seq{0}) == ledgerABC.id());
+            harness.vals().getPreferred(Ledger{}) ==
+            std::make_pair(ledgerABC.seq(), ledgerABC.id()));
     }
 
     void

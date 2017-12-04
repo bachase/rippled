@@ -611,21 +611,20 @@ public:
         return trie_.getJson();
     }
 
-    /** Return the ID of the preferred working ledger
+    /** Return the sequence number and ID of the preferred working ledger
 
         A ledger is preferred if it has more support amongst trusted validators
         and is *not* an ancestor of the current working ledger; otherwise it
         remains the current working ledger.
 
         @param ledger The local nodes current working ledger
-        @param minValidSeq The minimum allowable sequence number of the
-        preferred ledger
 
-        @return The id of the preferred working ledger, or ID{} if no trusted
-        validations are available to determine the preferred ledger
+        @return The sequence and id of the preferred working ledger,
+                or Seq{0},ID{} if no trusted validations are available to
+                determine the preferred ledger.
     */
-    ID
-    getPreferred(Ledger const& currLedger, Seq minValidSeq)
+    std::pair<Seq, ID>
+    getPreferred(Ledger const& currLedger)
     {
         Seq preferredSeq;
         ID preferredID;
@@ -634,9 +633,9 @@ public:
         std::tie(preferredSeq, preferredID) = withTrie(
             lock, [](LedgerTrie<Ledger>& trie) { return trie.getPreferred(); });
 
-        // Too early preferred ledger, or unknown id -> unknown preferred
-        if (preferredSeq < minValidSeq || preferredID == ID{})
-            return ID{};
+        // No trusted validations to determine branch
+        if (preferredSeq == Seq{0})
+            return std::make_pair(preferredSeq, preferredID);
 
         Seq currSeq = currLedger.seq();
         ID currID = currLedger.id();
@@ -650,22 +649,41 @@ public:
                 Ledger const& ledger = it.second;
                 if (ledger.seq() == preferredSeq &&
                     ledger.id() == preferredID && ledger[currSeq] == currID)
-                    return currID;
+                    return std::make_pair(currSeq, currID);
             }
         }
 
         // A ledger ahead of us is preferred regardless of whether it is
         // a descendent of our working ledger or it is on a different chain
         if (preferredSeq > currSeq)
-            return preferredID;
+            return std::make_pair(preferredSeq, preferredID);
 
         // Only switch to earlier sequence numbers if it is a different
         // chain to avoid jumping backward unnecessarily
         if (currLedger[preferredSeq] != preferredID)
-            return preferredID;
+            return std::make_pair(preferredSeq, preferredID);
 
         // Stick with current ledger
-        return currID;
+        return std::make_pair(currSeq, currID);
+    }
+
+    /** Get the ID of the preferred working ledger that exceeds a minimum valid
+        ledger sequence number
+
+        @param currLedger Current working ledger
+        @param minValidSeq Minimum allowed sequence number
+
+        @return ID Of the preferred ledger, or currLedger if the preferred ledger
+                   is not valid
+    */
+    ID
+    getPreferred(Ledger const& currLedger, Seq minValidSeq)
+    {
+        std::pair<Seq, ID> preferred = getPreferred(currLedger);
+        if(preferred.first >= minValidSeq && preferred.second != ID{})
+            return preferred.second;
+        return currLedger.id();
+
     }
 
     /** Count the number of current trusted validators working on a ledger
