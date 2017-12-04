@@ -1273,84 +1273,68 @@ bool NetworkOPsImp::checkLastClosedLedger (
     JLOG(m_journal.trace()) << "OurClosed:  " << closedLedger;
     JLOG(m_journal.trace()) << "PrevClosed: " << prevClosedLedger;
 
-    struct ValidationCount
-    {
-        std::uint32_t trustedValidations = 0;
-        std::uint32_t nodesUsing = 0;
-    };
-
-    hash_map<uint256, ValidationCount> ledgers;
-#if 0
-    {
-        hash_map<uint256, std::uint32_t> current =
-            app_.getValidations().currentTrustedDistribution(
-                closedLedger,
-                prevClosedLedger,
-                m_ledgerMaster.getValidLedgerIndex());
-
-        for (auto& it: current)
-            ledgers[it.first].trustedValidations += it.second;
-    }
-#endif
-    auto& ourVC = ledgers[closedLedger];
-
-    if (mMode >= omTRACKING)
-    {
-        ++ourVC.nodesUsing;
-    }
-
-    for (auto& peer: peerList)
-    {
-        uint256 peerLedger = peer->getClosedLedgerHash ();
-
-        if (peerLedger.isNonZero ())
-            ++ledgers[peerLedger].nodesUsing;
-    }
-
-
-    // 3) Is there a network ledger we'd like to switch to? If so, do we have
-    // it?
+    //-------------------------------------------------------------------------
     bool switchLedgers = false;
-    ValidationCount bestCounts = ledgers[closedLedger];
 
-    for (auto const& it: ledgers)
+    // Try to use validations to determine the preferred ledger
+    auto & validations = app_.getValidations();
+    std::pair<LedgerIndex, uint256> const preferred = validations.getPreferred(
+        RCLValidatedLedger{ourClosed, validations.journal()});
+
+    JLOG(m_journal.debug())
+        << "ValidationTrie " << Json::Compact(validations.getJsonTrie());
+
+    // Trusted validations exist and indicate a preferred ledger
+    if (preferred.second.isNonZero() && preferred.first > 0)
     {
-        uint256 const & currLedger =  it.first;
-        ValidationCount const & currCounts = it.second;
-
-        JLOG(m_journal.debug()) << "L: " << currLedger
-                              << " t=" << currCounts.trustedValidations
-                              << ", n=" << currCounts.nodesUsing;
-
-        bool const preferCurr = [&]()
+        // Can only switch to fully validated ledger or later
+        if (preferred.first >= m_ledgerMaster.getValidLedgerIndex())
         {
-            // Prefer ledger with more trustedValidations
-            if (currCounts.trustedValidations > bestCounts.trustedValidations)
-                return true;
-            if (currCounts.trustedValidations < bestCounts.trustedValidations)
-                return false;
-            // If neither are trusted, prefer more nodesUsing
-            if (currCounts.trustedValidations == 0)
+            if (preferred.second != closedLedger)
             {
-                if (currCounts.nodesUsing > bestCounts.nodesUsing)
-                    return true;
-                if (currCounts.nodesUsing < bestCounts.nodesUsing)
-                    return false;
+                closedLedger = preferred.second;
+                switchLedgers = true;
             }
-            // If tied trustedValidations (non-zero) or tied nodesUsing,
-            // prefer higher ledger hash
-            return currLedger > closedLedger;
-
-        }();
-
-        // Switch to current ledger if it is preferred over best so far
-        if (preferCurr)
-        {
-            bestCounts = currCounts;
-            closedLedger = currLedger;
-            switchLedgers = true;
         }
     }
+    else
+    {
+        // Rely on peer ledgers if no trusted validations exist
+        hash_map<uint256, std::uint32_t> ledgers;
+        ledgers[closedLedger] = 0;
+        if (mMode >= omTRACKING)
+        {
+            ledgers[closedLedger]++;
+        }
+
+        for (auto& peer : peerList)
+        {
+            uint256 peerLedger = peer->getClosedLedgerHash();
+
+            if (peerLedger.isNonZero())
+                ++ledgers[peerLedger];
+        }
+
+        std::uint32_t bestCount = ledgers[closedLedger];
+        for (auto const& it : ledgers)
+        {
+            uint256 const& currLedger = it.first;
+            std::uint32_t const& currCount = it.second;
+
+            JLOG(m_journal.debug())
+                << "L: " << currLedger << " n=" << currCount;
+
+            // Switch to current ledger if it is preferred over best so far
+            if (std::tie(currCount, currLedger) >
+                std::tie(bestCount, closedLedger))
+            {
+                bestCount = currCount;
+                closedLedger = currLedger;
+                switchLedgers = true;
+            }
+        }
+    }
+    //-------------------------------------------------------------------------
 
     if (switchLedgers && (closedLedger == prevClosedLedger))
     {
@@ -1365,15 +1349,15 @@ bool NetworkOPsImp::checkLastClosedLedger (
     if (!switchLedgers)
         return false;
 
-    auto consensus = m_ledgerMaster.getLedgerByHash (closedLedger);
+    auto consensus = m_ledgerMaster.getLedgerByHash(closedLedger);
 
     if (!consensus)
-        consensus = app_.getInboundLedgers().acquire (
+        consensus = app_.getInboundLedgers().acquire(
             closedLedger, 0, InboundLedger::fcCONSENSUS);
 
     if (consensus &&
-        ! m_ledgerMaster.isCompatible (*consensus, m_journal.debug(),
-            "Not switching"))
+        !m_ledgerMaster.isCompatible(
+            *consensus, m_journal.debug(), "Not switching"))
     {
         // Don't switch to a ledger not on the validated chain
         networkClosed = ourClosed->info().hash;
@@ -1381,18 +1365,18 @@ bool NetworkOPsImp::checkLastClosedLedger (
     }
 
     JLOG(m_journal.warn()) << "We are not running on the consensus ledger";
-    JLOG(m_journal.info()) << "Our LCL: " << getJson (*ourClosed);
+    JLOG(m_journal.info()) << "Our LCL: " << getJson(*ourClosed);
     JLOG(m_journal.info()) << "Net LCL " << closedLedger;
 
     if ((mMode == omTRACKING) || (mMode == omFULL))
-        setMode (omCONNECTED);
+        setMode(omCONNECTED);
 
     if (consensus)
     {
-        // FIXME: If this rewinds the ledger sequence, or has the same sequence, we
-        // should update the status on any stored transactions in the invalidated
-        // ledgers.
-        switchLastClosedLedger (consensus);
+        // FIXME: If this rewinds the ledger sequence, or has the same
+        // sequence, we should update the status on any stored transactions
+        // in the invalidated ledgers.
+        switchLastClosedLedger(consensus);
     }
 
     return true;
@@ -2781,7 +2765,6 @@ std::uint32_t NetworkOPsImp::acceptLedger (
 
     if (!m_standalone)
         Throw<std::runtime_error> ("Operation only possible in STANDALONE mode.");
-
     // FIXME Could we improve on this and remove the need for a specialized
     // API in Consensus?
     beginConsensus (m_ledgerMaster.getClosedLedger()->info().hash);
