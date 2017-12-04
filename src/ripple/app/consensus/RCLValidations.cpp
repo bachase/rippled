@@ -20,6 +20,7 @@
 #include <BeastConfig.h>
 #include <ripple/app/consensus/RCLValidations.h>
 #include <ripple/app/ledger/InboundLedger.h>
+#include <ripple/app/ledger/InboundLedgers.h>
 #include <ripple/app/ledger/LedgerMaster.h>
 #include <ripple/app/main/Application.h>
 #include <ripple/app/misc/NetworkOPs.h>
@@ -41,7 +42,7 @@ namespace ripple {
 auto
 RCLValidatedLedger::minSeq() const -> Seq
 {
-    return seq() - std::min(seq(),maxAncestors);
+    return seq() - std::min(seq(),Seq{maxAncestors});
 }
 
 auto
