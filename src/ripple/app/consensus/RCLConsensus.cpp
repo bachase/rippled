@@ -257,8 +257,7 @@ RCLConsensus::Adaptor::getPrevLedger(
         if (mode != ConsensusMode::wrongLedger)
             app_.getOPs().consensusViewChange();
 
-        if (auto stream = j_.debug())
-            stream << validations.getJsonTrie();
+        JLOG(j_.debug())<< Json::Compact(validations.getJsonTrie());
     }
 
     return netLgr;
