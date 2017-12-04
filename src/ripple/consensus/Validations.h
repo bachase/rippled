@@ -74,7 +74,6 @@ struct ValidationParms
     std::chrono::seconds validationSET_EXPIRES = std::chrono::minutes{10};
 };
 
-
 /** Whether a validation is still current
 
     Determines whether a validation can still be considered the current
@@ -135,24 +134,6 @@ to_string(ValStatus m)
     }
 }
 
-/** Maintains the ledger trie for the lastest validations.
-
-    Uses the LedgerTrie class to monitor the preferred validation chain. This
-    is based on trusted partial and full validations. It should not be used
-    for determining whether the full validation quorum is reached; only to
-    ask questions about which ledger chains validators are operating on.
-
-    Since the LedgerTrie requires Ledgers to determine ancestry, this class
-    relies on the `Adaptor::acquire(Ledger::ID)` helper to load them. While
-    the load is pending, the prior validated ledger from that node remains in
-    place.
-
-    // TODO: stale?
-    // TODO: untrusted?
-*/
-//template <class Adaptor>
-
-
 /** Maintains current and recent ledger validations.
 
     Manages storage and queries related to validations received on the network.
@@ -181,7 +162,8 @@ to_string(ValStatus m)
         using ID = ID;
         using Seq = Seq;
 
-        // The default ledger represents a ledger that prefixes all other ledgers
+        // The default ledger represents a ledger that prefixes all other
+   ledgers
         // (aka the genesis ledger)
         Ledger();
 
@@ -311,7 +293,7 @@ class Validations
 private:
     // Remove support of a validated ledger
     void
-    removeTrie(ScopedLock const &, NodeKey const& key, Validation const& val)
+    removeTrie(ScopedLock const&, NodeKey const& key, Validation const& val)
     {
         {
             auto it = acquiring_.find(val.ledgerID());
@@ -334,7 +316,7 @@ private:
 
     // Check if any pending acquire ledger requests are complete
     void
-    checkAcquired(ScopedLock const & lock)
+    checkAcquired(ScopedLock const& lock)
     {
         for (auto it = acquiring_.begin(); it != acquiring_.end();)
         {
@@ -352,7 +334,7 @@ private:
 
     // Update the trie to reflect a new validated ledger
     void
-    updateTrie(ScopedLock const &, NodeKey const& key, Ledger ledger)
+    updateTrie(ScopedLock const&, NodeKey const& key, Ledger ledger)
     {
         auto ins = lastLedger_.emplace(key, ledger);
         if (!ins.second)
@@ -391,7 +373,7 @@ private:
             if (it != acquiring_.end())
             {
                 it->second.erase(key);
-                if(it->second.empty())
+                if (it->second.empty())
                     acquiring_.erase(*priorID);
             }
         }
@@ -399,7 +381,7 @@ private:
         checkAcquired(lock);
 
         if (boost::optional<Ledger> ledger = adaptor_.acquire(val.ledgerID()))
-            updateTrie(lock,key, *ledger);
+            updateTrie(lock, key, *ledger);
         else
             acquiring_[val.ledgerID()].insert(key);
     }
@@ -418,7 +400,7 @@ private:
     */
     template <class F>
     auto
-    withTrie(ScopedLock const &lock, F&& f)
+    withTrie(ScopedLock const& lock, F&& f)
     {
         NetClock::time_point t = adaptor_.now();
         auto it = current_.begin();
@@ -460,7 +442,7 @@ private:
 
     template <class Pre, class F>
     void
-    current(ScopedLock const & lock, Pre&& pre, F&& f)
+    current(ScopedLock const& lock, Pre&& pre, F&& f)
     {
         NetClock::time_point t = adaptor_.now();
         pre(current_.size());
@@ -500,7 +482,7 @@ private:
     */
     template <class Pre, class F>
     void
-    byLedger(ScopedLock const & , ID const& ledgerID, Pre&& pre, F&& f)
+    byLedger(ScopedLock const&, ID const& ledgerID, Pre&& pre, F&& f)
     {
         ScopedLock lock{mutex_};
         auto it = byLedger_.find(ledgerID);
@@ -604,7 +586,7 @@ public:
             }
             else if (val.trusted())
             {
-                updateTrie(lock,  key, val, boost::none);
+                updateTrie(lock, key, val, boost::none);
             }
         }
         return ValStatus::current;
@@ -631,18 +613,17 @@ public:
 
     /** Return the ID of the preferred working ledger
 
-            A ledger is preferred if it has more support amongst trusted
-           validators and is *not* an ancestor of the current working ledger;
-           otherwise it remains the current working ledger.
+        A ledger is preferred if it has more support amongst trusted validators
+        and is *not* an ancestor of the current working ledger; otherwise it
+        remains the current working ledger.
 
-            @param ledger The local nodes current working ledger
-            @param minValidSeq The minimum allowable sequence number of the
-           preferred ledger
+        @param ledger The local nodes current working ledger
+        @param minValidSeq The minimum allowable sequence number of the
+        preferred ledger
 
-            @return The id of the preferred working ledger, or ID{} if no
-           trusted validations are available to determine the preferred ledger
-
-        */
+        @return The id of the preferred working ledger, or ID{} if no trusted
+        validations are available to determine the preferred ledger
+    */
     ID
     getPreferred(Ledger const& currLedger, Seq minValidSeq)
     {
@@ -668,8 +649,7 @@ public:
             {
                 Ledger const& ledger = it.second;
                 if (ledger.seq() == preferredSeq &&
-                    ledger.id() == preferredID &&
-                    ledger[currSeq] == currID)
+                    ledger.id() == preferredID && ledger[currSeq] == currID)
                     return currID;
             }
         }
