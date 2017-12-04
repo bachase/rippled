@@ -484,7 +484,6 @@ private:
     void
     byLedger(ScopedLock const&, ID const& ledgerID, Pre&& pre, F&& f)
     {
-        ScopedLock lock{mutex_};
         auto it = byLedger_.find(ledgerID);
         if (it != byLedger_.end())
         {
