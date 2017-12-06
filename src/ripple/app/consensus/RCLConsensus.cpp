@@ -236,9 +236,7 @@ RCLConsensus::Adaptor::proposersFinished(
     RCLCxLedger const& ledger,
     LedgerHash const& h) const
 {
-    RCLValidations & validations = app_.getValidations();
-    return validations.getNodesAfter(
-        RCLValidatedLedger{ledger.ledger_, validations.journal()}, h);
+    return getNodesAfter(app_.getValidations(), ledger.ledger_, h);
 }
 
 uint256
@@ -247,9 +245,9 @@ RCLConsensus::Adaptor::getPrevLedger(
     RCLCxLedger const& ledger,
     ConsensusMode mode)
 {
-    RCLValidations& validations = app_.getValidations();
-    uint256 netLgr = validations.getPreferred(
-        RCLValidatedLedger{ledger.ledger_, validations.journal()},
+    uint256 netLgr = getPreferred(
+        app_.getValidations(),
+        ledger.ledger_,
         ledgerMaster_.getValidLedgerIndex());
 
     if (netLgr != ledgerID && netLgr != uint256{})
@@ -257,7 +255,7 @@ RCLConsensus::Adaptor::getPrevLedger(
         if (mode != ConsensusMode::wrongLedger)
             app_.getOPs().consensusViewChange();
 
-        JLOG(j_.debug())<< Json::Compact(validations.getJsonTrie());
+        JLOG(j_.debug())<< Json::Compact(app_.getValidations().getJsonTrie());
     }
 
     return netLgr;

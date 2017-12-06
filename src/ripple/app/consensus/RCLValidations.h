@@ -204,6 +204,12 @@ public:
     boost::optional<RCLValidatedLedger>
     acquire(LedgerHash const & id);
 
+    beast::Journal
+    journal() const
+    {
+        return j_;
+    }
+
 private:
     using ScopedLockType = std::lock_guard<Mutex>;
     using ScopedUnlockType = GenericScopedUnlock<Mutex>;
@@ -245,6 +251,20 @@ handleNewValidation(
     STValidation::ref val,
     std::string const& source);
 
+
+// @see Validations::getNodesAfter
+std::size_t
+getNodesAfter(
+    RCLValidations& vals,
+    std::shared_ptr<Ledger const> ledger,
+    uint256 const& ledgerID);
+
+// @see Validations::getPreferred
+uint256
+getPreferred(
+    RCLValidations& vals,
+    std::shared_ptr<Ledger const> ledger,
+    LedgerIndex minValidSeq);
 }  // namespace ripple
 
 #endif

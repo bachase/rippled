@@ -202,7 +202,7 @@ class Validations_test : public beast::unit_test::suite
         using Validation = csf::Validation;
         using Ledger = csf::Ledger;
 
-        Adaptor(StaleData& sd, clock_type& c, LedgerOracle& o, beast::Journal)
+        Adaptor(StaleData& sd, clock_type& c, LedgerOracle& o)
             : staleData_{sd}, c_{c}, oracle_{o}
         {
         }
@@ -242,13 +242,12 @@ class Validations_test : public beast::unit_test::suite
         StaleData staleData_;
         ValidationParms p_;
         beast::manual_clock<std::chrono::steady_clock> clock_;
-        beast::Journal j_;
         TestValidations tv_;
         PeerID nextNodeId_{0};
 
     public:
         TestHarness(LedgerOracle& o)
-            : tv_(p_, clock_, j_, staleData_, clock_, o)
+            : tv_(p_, clock_, staleData_, clock_, o)
         {
         }
 

@@ -133,7 +133,7 @@ struct Peer
         using Validation = csf::Validation;
         using Ledger = csf::Ledger;
 
-        ValAdaptor(Peer& p, beast::Journal) : p_{p}
+        ValAdaptor(Peer& p) : p_{p}
         {
         }
 
@@ -285,7 +285,7 @@ struct Peer
         , scheduler{s}
         , net{n}
         , trustGraph(tg)
-        , validations{ValidationParms{}, s.clock(), j, *this}
+        , validations{ValidationParms{}, s.clock(), *this}
         , collectors{c}
     {
         // All peers start from the default constructed genesis ledger

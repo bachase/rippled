@@ -1279,7 +1279,7 @@ bool NetworkOPsImp::checkLastClosedLedger (
     // Try to use validations to determine the preferred ledger
     auto & validations = app_.getValidations();
     std::pair<LedgerIndex, uint256> const preferred = validations.getPreferred(
-        RCLValidatedLedger{ourClosed, validations.journal()});
+        RCLValidatedLedger{ourClosed, m_journal});
 
     JLOG(m_journal.debug())
         << "ValidationTrie " << Json::Compact(validations.getJsonTrie());

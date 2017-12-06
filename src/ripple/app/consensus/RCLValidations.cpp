@@ -297,7 +297,7 @@ handleNewValidation(Application& app,
 
     bool shouldRelay = false;
     RCLValidations& validations = app.getValidations();
-    beast::Journal j = validations.journal();
+    beast::Journal j = validations.adaptor().journal();
 
     // masterKey is seated only if validator is trusted or listed
     if (masterKey)
@@ -349,4 +349,27 @@ handleNewValidation(Application& app,
     // ability/bandwidth to. None of that was implemented.
     return shouldRelay;
 }
+
+std::size_t
+getNodesAfter(
+    RCLValidations& vals,
+    std::shared_ptr<Ledger const> ledger,
+    uint256 const& ledgerID)
+{
+    return vals.getNodesAfter(
+        RCLValidatedLedger{std::move(ledger), vals.adaptor().journal()},
+        ledgerID);
+}
+
+uint256
+getPreferred(
+    RCLValidations& vals,
+    std::shared_ptr<Ledger const> ledger,
+    LedgerIndex minValidSeq)
+{
+    return vals.getPreferred(
+        RCLValidatedLedger{std::move(ledger), vals.adaptor().journal()},
+        minValidSeq);
+}
+
 }  // namespace ripple

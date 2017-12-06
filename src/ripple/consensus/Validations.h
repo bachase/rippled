@@ -284,8 +284,6 @@ class Validations
     //! Parameters to determine validation staleness
     ValidationParms const parms_;
 
-    beast::Journal j_;
-
     //! Adaptor instance
     //! Is NOT managed by the mutex_ above
     Adaptor adaptor_;
@@ -500,17 +498,23 @@ public:
 
         @param p ValidationParms to control staleness/expiration of validaitons
         @param c Clock to use for expiring validations stored by ledger
-        @param j Journal used for logging, passed to Adaptor constructor
         @param ts Parameters for constructing Adaptor instance
     */
     template <class... Ts>
     Validations(
         ValidationParms const& p,
         beast::abstract_clock<std::chrono::steady_clock>& c,
-        beast::Journal j,
         Ts&&... ts)
-        : byLedger_(c), parms_(p), j_(j), adaptor_(std::forward<Ts>(ts)..., j)
+        : byLedger_(c), parms_(p), adaptor_(std::forward<Ts>(ts)...)
     {
+    }
+
+    /** Return the adaptor instance
+    */
+    Adaptor const &
+    adaptor() const
+    {
+        return adaptor_;
     }
 
     /** Return the validation timing parameters
@@ -519,14 +523,6 @@ public:
     parms() const
     {
         return parms_;
-    }
-
-    /** Return the journal
-     */
-    beast::Journal
-    journal() const
-    {
-        return j_;
     }
 
     /** Add a new validation
@@ -853,8 +849,6 @@ public:
     void
     flush()
     {
-        JLOG(j_.info()) << "Flushing validations";
-
         hash_map<NodeKey, Validation> flushed;
         {
             ScopedLock lock{mutex_};
@@ -866,8 +860,6 @@ public:
         }
 
         adaptor_.flush(std::move(flushed));
-
-        JLOG(j_.debug()) << "Validations flushed";
     }
 };
 
