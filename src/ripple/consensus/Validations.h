@@ -688,10 +688,13 @@ public:
         preferred working ledger.
 
         @param lcl Last closed ledger by this node
-        @param minSeq Minimum allowed sequence number of the preferred ledger
+        @param minSeq Minimum allowed sequence number of the trusted preferred ledger
         @param peerCounts Map from ledger ids to count of peers with that as the
                           last closed ledger
         @return The preferred last closed ledger ID
+
+        @note The minSeq does not apply to the peerCounts, since this function
+              does not know their sequence number
     */
     ID
     getPreferredLCL(

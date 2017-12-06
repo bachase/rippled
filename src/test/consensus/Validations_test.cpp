@@ -873,6 +873,65 @@ class Validations_test : public beast::unit_test::suite
     }
 
     void
+    testGetPreferredLCL()
+    {
+        using namespace std::chrono_literals;
+        testcase("Get preferred LCL");
+
+        LedgerHistoryHelper h;
+        TestHarness harness(h.oracle);
+        Node a = harness.makeNode();
+
+        Ledger ledgerA = h["a"];
+        Ledger ledgerB = h["b"];
+        Ledger ledgerC = h["c"];
+
+        using ID = Ledger::ID;
+        using Seq = Ledger::Seq;
+
+
+        hash_map<ID, std::uint32_t> peerCounts;
+
+        // No trusted validations or counts sticks with current ledger
+        BEAST_EXPECT(
+            harness.vals().getPreferredLCL(ledgerA, Seq{0}, peerCounts) ==
+            ledgerA.id());
+
+        ++peerCounts[ledgerB.id()];
+
+        // No trusted validations, rely on peer counts
+        BEAST_EXPECT(
+            harness.vals().getPreferredLCL(ledgerA, Seq{0}, peerCounts) ==
+            ledgerB.id());
+
+        ++peerCounts[ledgerC.id()];
+        // No trusted validations, tied peers goes with larger ID
+        BEAST_EXPECT(ledgerC.id() > ledgerB.id());
+
+        BEAST_EXPECT(
+            harness.vals().getPreferredLCL(ledgerA, Seq{0}, peerCounts) ==
+            ledgerC.id());
+
+        peerCounts[ledgerC.id()] += 1000;
+
+        // Single trusted always wins over peer counts
+        BEAST_EXPECT(ValStatus::current == harness.add(a.validate(ledgerA)));
+        BEAST_EXPECT(
+            harness.vals().getPreferredLCL(ledgerB, Seq{0}, peerCounts) ==
+            ledgerA.id());
+
+        // Stick with current ledger if trusted validation ledger has to old
+        // of a sequence
+        BEAST_EXPECT(
+            harness.vals().getPreferredLCL(ledgerB, Seq{2}, peerCounts) ==
+            ledgerB.id());
+
+
+
+
+    }
+
+    void
     testAcquireValidatedLedger()
     {
         using namespace std::chrono_literals;
@@ -946,6 +1005,7 @@ class Validations_test : public beast::unit_test::suite
         testExpire();
         testFlush();
         testGetPreferredLedger();
+        testGetPreferredLCL();
         testAcquireValidatedLedger();
         testNumTrustedForLedger();
     }
