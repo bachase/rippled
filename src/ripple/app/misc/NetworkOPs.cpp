@@ -1274,68 +1274,39 @@ bool NetworkOPsImp::checkLastClosedLedger (
     JLOG(m_journal.trace()) << "PrevClosed: " << prevClosedLedger;
 
     //-------------------------------------------------------------------------
-    bool switchLedgers = false;
+    // Determine preferred last closed ledger
 
-    // Try to use validations to determine the preferred ledger
     auto & validations = app_.getValidations();
-    std::pair<LedgerIndex, uint256> const preferred = validations.getPreferred(
-        RCLValidatedLedger{ourClosed, m_journal});
-
     JLOG(m_journal.debug())
         << "ValidationTrie " << Json::Compact(validations.getJsonTrie());
 
-    // Trusted validations exist and indicate a preferred ledger
-    if (preferred.second.isNonZero() && preferred.first > 0)
+    // Will rely on peer LCL if no trusted validations exist
+    hash_map<uint256, std::uint32_t> peerCounts;
+    peerCounts[closedLedger] = 0;
+    if (mMode >= omTRACKING)
+        peerCounts[closedLedger]++;
+
+    for (auto& peer : peerList)
     {
-        // Can only switch to fully validated ledger or later
-        if (preferred.first >= m_ledgerMaster.getValidLedgerIndex())
-        {
-            if (preferred.second != closedLedger)
-            {
-                closedLedger = preferred.second;
-                switchLedgers = true;
-            }
-        }
+        uint256 peerLedger = peer->getClosedLedgerHash();
+
+        if (peerLedger.isNonZero())
+            ++peerCounts[peerLedger];
     }
-    else
-    {
-        // Rely on peer ledgers if no trusted validations exist
-        hash_map<uint256, std::uint32_t> ledgers;
-        ledgers[closedLedger] = 0;
-        if (mMode >= omTRACKING)
-        {
-            ledgers[closedLedger]++;
-        }
 
-        for (auto& peer : peerList)
-        {
-            uint256 peerLedger = peer->getClosedLedgerHash();
+    for(auto const & it: peerCounts)
+        JLOG(m_journal.debug()) << "L: " << it.first << " n=" << it.second;
 
-            if (peerLedger.isNonZero())
-                ++ledgers[peerLedger];
-        }
+    uint256 preferredLCL = getPreferredLCL(
+        validations,
+        ourClosed,
+        m_ledgerMaster.getValidLedgerIndex(),
+        peerCounts);
 
-        std::uint32_t bestCount = ledgers[closedLedger];
-        for (auto const& it : ledgers)
-        {
-            uint256 const& currLedger = it.first;
-            std::uint32_t const& currCount = it.second;
-
-            JLOG(m_journal.debug())
-                << "L: " << currLedger << " n=" << currCount;
-
-            // Switch to current ledger if it is preferred over best so far
-            if (std::tie(currCount, currLedger) >
-                std::tie(bestCount, closedLedger))
-            {
-                bestCount = currCount;
-                closedLedger = currLedger;
-                switchLedgers = true;
-            }
-        }
-    }
+    bool switchLedgers = preferredLCL != closedLedger;
+    if(switchLedgers)
+        closedLedger = preferredLCL;
     //-------------------------------------------------------------------------
-
     if (switchLedgers && (closedLedger == prevClosedLedger))
     {
         // don't switch to our own previous ledger

@@ -372,4 +372,17 @@ getPreferred(
         minValidSeq);
 }
 
+uint256
+getPreferredLCL(
+    RCLValidations& vals,
+    std::shared_ptr<Ledger const> ledger,
+    LedgerIndex minSeq,
+    hash_map<uint256, std::uint32_t> const& peerCounts)
+{
+    return vals.getPreferredLCL(
+        RCLValidatedLedger{std::move(ledger), vals.adaptor().journal()},
+        minSeq,
+        peerCounts);
+}
+
 }  // namespace ripple

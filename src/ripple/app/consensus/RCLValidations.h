@@ -251,7 +251,6 @@ handleNewValidation(
     STValidation::ref val,
     std::string const& source);
 
-
 // @see Validations::getNodesAfter
 std::size_t
 getNodesAfter(
@@ -264,7 +263,15 @@ uint256
 getPreferred(
     RCLValidations& vals,
     std::shared_ptr<Ledger const> ledger,
-    LedgerIndex minValidSeq);
+    LedgerIndex minSeq);
+
+// @see Validations::getPreferredLCL
+uint256
+getPreferredLCL(RCLValidations& vals,
+    std::shared_ptr<Ledger const> ledger,
+    LedgerIndex minSeq,
+    hash_map<uint256, std::uint32_t> const & peerCounts);
+
 }  // namespace ripple
 
 #endif

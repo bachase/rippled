@@ -681,6 +681,44 @@ public:
 
     }
 
+
+    /** Determine the preferred last closed ledger for the next consensus round.
+
+        Called before starting the next round of ledger consensus to determine the
+        preferred working ledger.
+
+        @param lcl Last closed ledger by this node
+        @param minSeq Minimum allowed sequence number of the preferred ledger
+        @param peerCounts Map from ledger ids to count of peers with that as the
+                          last closed ledger
+        @return The preferred last closed ledger ID
+    */
+    ID
+    getPreferredLCL(
+        Ledger const & lcl,
+        Seq minSeq,
+        hash_map<ID, std::uint32_t> const& peerCounts)
+    {
+        std::pair<Seq, ID> preferred = getPreferred(lcl);
+
+        // Trusted validations exist
+        if (preferred.second != ID{} && preferred.first > Seq{0})
+            return (preferred.first >= minSeq) ? preferred.second : lcl.id();
+
+        // Otherwise, rely on peer ledgers
+        auto it = std::max_element(
+            peerCounts.begin(), peerCounts.end(), [](auto& a, auto& b) {
+                // Prefer larger counts, then larger ids on ties
+                // (max_element expects this to return true if a < b)
+                return std::tie(a.second, a.first) <
+                    std::tie(b.second, b.first);
+            });
+
+        if (it != peerCounts.end())
+            return it->first;
+        return lcl.id();
+    }
+
     /** Count the number of current trusted validators working on a ledger
         after the specified one.
 
