@@ -832,8 +832,16 @@ public:
         csf::PeerGroup& groupCfast;
         csf::PeerGroup& groupCsplit;
         csf::SimDuration delay;
-
         bool reconnected = false;
+
+        Disruptor(
+            csf::PeerGroup& net,
+            csf::PeerGroup& c,
+            csf::PeerGroup& split,
+            csf::SimDuration d)
+            : network(net), groupCfast(c), groupCsplit(split), delay(d)
+        {
+        }
 
         template <class E>
         void
@@ -932,7 +940,7 @@ public:
         // The rest of the network is connected at the same speed
         (network - groupCfast).connect(network - groupCfast, delay);
 
-        Disruptor dc{network, groupCfast, groupCsplit, delay};
+        Disruptor dc(network, groupCfast, groupCsplit, delay);
         sim.collectors.add(dc);
 
         // Consensus round to generate ledger A
