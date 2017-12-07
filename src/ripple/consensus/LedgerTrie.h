@@ -441,12 +441,11 @@ public:
 
                 while (loc->tipSupport == 0 && loc != root.get())
                 {
+                    Node* parent = loc->parent;
                     if (loc->children.empty())
                     {
                         // this node can be erased
-                        Node* parent = loc->parent;
                         parent->erase(loc);
-                        loc = parent;
                     }
                     else if (loc->children.size() == 1)
                     {
@@ -454,12 +453,13 @@ public:
                         std::unique_ptr<Node> child =
                             std::move(loc->children.front());
                         child->span = merge(loc->span, child->span);
-                        child->parent = loc->parent;
-                        loc->parent->children.emplace_back(std::move(child));
-                        loc->parent->erase(loc);
+                        child->parent = parent;
+                        parent->children.emplace_back(std::move(child));
+                        parent->erase(loc);
                     }
                     else
                         break;
+                    loc = parent;
                 }
                 return true;
             }
