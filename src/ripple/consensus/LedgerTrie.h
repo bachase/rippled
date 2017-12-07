@@ -439,12 +439,14 @@ public:
                     decNode = decNode->parent;
                 }
 
-                if (loc->tipSupport == 0)
+                while (loc->tipSupport == 0 && loc != root.get())
                 {
                     if (loc->children.empty())
                     {
                         // this node can be erased
-                        loc->parent->erase(loc);
+                        Node* parent = loc->parent;
+                        parent->erase(loc);
+                        loc = parent;
                     }
                     else if (loc->children.size() == 1)
                     {
@@ -456,6 +458,8 @@ public:
                         loc->parent->children.emplace_back(std::move(child));
                         loc->parent->erase(loc);
                     }
+                    else
+                        break;
                 }
                 return true;
             }

@@ -267,6 +267,29 @@ class LedgerTrie_test : public beast::unit_test::suite
             BEAST_EXPECT(t.tipSupport(h["abc"]) == 0);
             BEAST_EXPECT(t.branchSupport(h["abc"]) == 2);
         }
+
+        // In trie with = 1 tip support, allow parent compaction
+        {
+            LedgerTrie<Ledger> t;
+            LedgerHistoryHelper h;
+            t.insert(h["ab"]);
+            t.insert(h["abc"]);
+            t.insert(h["abd"]);
+            BEAST_EXPECT(t.checkInvariants());
+            t.remove(h["ab"]);
+            BEAST_EXPECT(t.checkInvariants());
+            BEAST_EXPECT(t.tipSupport(h["abc"]) == 1);
+            BEAST_EXPECT(t.tipSupport(h["abd"]) == 1);
+            BEAST_EXPECT(t.tipSupport(h["ab"]) == 0);
+            BEAST_EXPECT(t.branchSupport(h["ab"]) == 2);
+
+            t.remove(h["abd"]);
+            BEAST_EXPECT(t.checkInvariants());
+
+            BEAST_EXPECT(t.tipSupport(h["abc"]) == 1);
+            BEAST_EXPECT(t.branchSupport(h["ab"]) == 1);
+
+        }
     }
 
     void
