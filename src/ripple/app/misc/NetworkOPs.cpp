@@ -122,7 +122,7 @@ class NetworkOPsImp final
     {
         struct Counters
         {
-            std::uint32_t transitions = 0;
+            std::uint64_t transitions = 0;
             std::chrono::microseconds dur = std::chrono::microseconds (0);
         };
 
@@ -2389,6 +2389,10 @@ Json::Value NetworkOPsImp::getServerInfo (bool human, bool admin)
 
     info[jss::state_accounting] = accounting_.json();
     info[jss::uptime] = UptimeTimer::getInstance ().getElapsedSeconds ();
+    info[jss::jq_trans_overflow] = app_.overlay().getJqTransOverflow();
+    info[jss::peer_disconnects] = app_.overlay().getPeerDisconnect();
+    info[jss::peer_disconnects_resources] =
+        app_.overlay().getPeerDisconnectCharges();
 
     return info;
 }
@@ -3387,7 +3391,7 @@ Json::Value NetworkOPsImp::StateAccounting::json() const
         ret[states_[i]] = Json::objectValue;
         auto& state = ret[states_[i]];
         state[jss::transitions] = counters[i].transitions;
-        state[jss::duration_us] = std::to_string (counters[i].dur.count());
+        state[jss::duration_us] = counters[i].dur.count();
     }
 
     return ret;

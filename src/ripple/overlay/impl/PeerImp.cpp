@@ -242,6 +242,7 @@ PeerImp::charge (Resource::Charge const& fee)
         usage_.disconnect() && strand_.running_in_this_thread())
     {
         // Sever the connection
+        overlay_.incPeerDisconnectCharges();
         fail("charge: Resources");
     }
 }
@@ -434,6 +435,7 @@ PeerImp::close()
         error_code ec;
         timer_.cancel(ec);
         socket_.close(ec);
+        overlay_.incPeerDisconnect();
         if(m_inbound)
         {
             JLOG(journal_.debug()) << "Closed";

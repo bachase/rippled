@@ -244,6 +244,24 @@ Value::Value ( UInt value )
     value_.uint_ = value;
 }
 
+Value::Value ( std::int64_t value )
+    : type_ ( stringValue )
+    , allocated_ ( true )
+{
+    std::string str(std::to_string(value));
+    value_.string_ = valueAllocator ()->duplicateStringValue (
+        str.c_str (), str.size() );
+}
+
+Value::Value ( std::uint64_t value )
+    : type_ ( stringValue )
+    , allocated_ ( true )
+{
+    std::string str(std::to_string(value));
+    value_.string_ = valueAllocator ()->duplicateStringValue (
+        str.c_str (), str.size() );
+}
+
 Value::Value ( double value )
     : type_ ( realValue )
 {
@@ -288,24 +306,6 @@ Value::Value ( bool value )
     : type_ ( booleanValue )
 {
     value_.bool_ = value;
-}
-
-Value::Value ( std::uint64_t value )
-    : type_ ( stringValue )
-    , allocated_ ( true )
-{
-    std::string str(std::to_string(value));
-    value_.string_ = valueAllocator ()->duplicateStringValue (
-        str.c_str (), str.size() );
-}
-
-Value::Value ( std::int64_t value )
-    : type_ ( stringValue )
-    , allocated_ ( true )
-{
-    std::string str(std::to_string(value));
-    value_.string_ = valueAllocator ()->duplicateStringValue (
-        str.c_str (), str.size() );
 }
 
 Value::Value ( const Value& other )

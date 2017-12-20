@@ -253,12 +253,14 @@ public:
     Value ( ValueType type = nullValue );
     Value ( Int value );
     Value ( UInt value );
+    // Convert 64bit integers to string. Json integers overflow between 32
+    // and 64 bits: some large integers cannot be expressed as
+    // a Json integer therefore.
+    Value ( std::int64_t value );
+    Value ( std::uint64_t value );
     Value ( double value );
     Value ( const char* value );
     Value ( const char* beginValue, const char* endValue );
-
-    Value ( std::uint64_t value );
-    Value ( std::int64_t value );
 
     template <class T>
     Value ( ripple::perf::ContainerAtomic<T> const& value )
@@ -444,7 +446,7 @@ private:
         double real_;
         bool bool_;
         char* string_;
-        ObjectValues* map_ = nullptr;
+        ObjectValues* map_ {nullptr};
     } value_;
     ValueType type_ : 8;
     int allocated_ : 1;     // Notes: if declared as bool, bitfield is useless.
