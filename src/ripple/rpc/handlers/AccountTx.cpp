@@ -46,6 +46,7 @@ namespace ripple {
 // }
 Json::Value doAccountTx (RPC::Context& context)
 {
+    auto trace = perf::makeTrace("account_tx");
     auto& params = context.params;
 
     int limit = params.isMember (jss::limit) ?
@@ -94,6 +95,7 @@ Json::Value doAccountTx (RPC::Context& context)
     else if(params.isMember (jss::ledger_hash) ||
             params.isMember (jss::ledger_index))
     {
+        perf::start(trace, "validated");
         std::shared_ptr<ReadView const> ledger;
         auto ret = RPC::lookupLedger (ledger, context);
 
@@ -104,10 +106,13 @@ Json::Value doAccountTx (RPC::Context& context)
             (ledger->info().seq > uValidatedMax) ||
             (ledger->info().seq < uValidatedMin))
         {
+            perf::add(trace, "not validated");
+            perf::end(trace, "validated");
             return rpcError (rpcLGR_NOT_VALIDATED);
         }
 
         uLedgerMin = uLedgerMax = ledger->info().seq;
+        perf::end(trace, "validated");
     }
     else
     {
@@ -130,8 +135,10 @@ Json::Value doAccountTx (RPC::Context& context)
         ret[jss::account] = context.app.accountIDCache().toBase58(*account);
         Json::Value& jvTxns = (ret[jss::transactions] = Json::arrayValue);
 
+    std::size_t transCount = 0;
         if (bBinary)
         {
+            perf::start(trace, "binary");
             auto txns = context.netOps.getTxsAccountB (
                 *account, uLedgerMin, uLedgerMax, bForward, resumeToken, limit,
                 isUnlimited (context.role));
@@ -149,10 +156,13 @@ Json::Value doAccountTx (RPC::Context& context)
                 jvObj[jss::validated] = bValidated &&
                     uValidatedMin <= uLedgerIndex &&
                     uValidatedMax >= uLedgerIndex;
+                ++transCount;
             }
+            perf::end(trace, "binary");
         }
         else
         {
+            perf::start(trace, "text");
             auto txns = context.netOps.getTxsAccount (
                 *account, uLedgerMin, uLedgerMax, bForward, resumeToken, limit,
                 isUnlimited (context.role));
@@ -176,9 +186,11 @@ Json::Value doAccountTx (RPC::Context& context)
                         uValidatedMin <= uLedgerIndex &&
                         uValidatedMax >= uLedgerIndex;
                 }
-
+                ++transCount;
             }
+            perf::end(trace, "text");
         }
+        perf::add(trace, "tx_count", transCount);
 
         //Add information about the original query
         ret[jss::ledger_index_min] = uLedgerMin;

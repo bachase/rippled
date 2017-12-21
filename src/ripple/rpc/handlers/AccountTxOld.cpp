@@ -45,6 +45,7 @@ namespace ripple {
 // }
 Json::Value doAccountTxOld (RPC::Context& context)
 {
+    auto trace = perf::makeTrace("account_tx_old");
     std::uint32_t offset
             = context.params.isMember (jss::offset)
             ? context.params[jss::offset].asUInt () : 0;
@@ -114,6 +115,7 @@ Json::Value doAccountTxOld (RPC::Context& context)
     }
     else
     {
+        perf::start(trace, "validated");
         std::shared_ptr<ReadView const> ledger;
         auto ret = RPC::lookupLedger (ledger, context);
 
@@ -124,10 +126,13 @@ Json::Value doAccountTxOld (RPC::Context& context)
             (ledger->info().seq > uValidatedMax) ||
             (ledger->info().seq < uValidatedMin))
         {
+            perf::add(trace, "not validated");
+            perf::end(trace, "validated");
             return rpcError (rpcLGR_NOT_VALIDATED);
         }
 
         uLedgerMin = uLedgerMax = ledger->info().seq;
+        perf::end(trace, "validated");
     }
 
     int count = 0;
@@ -143,8 +148,10 @@ Json::Value doAccountTxOld (RPC::Context& context)
         ret[jss::account] = context.app.accountIDCache().toBase58(*raAccount);
         Json::Value& jvTxns = (ret[jss::transactions] = Json::arrayValue);
 
+        std::uint64_t transCount = 0;
         if (bBinary)
         {
+            perf::start(trace, "binary");
             auto txns = context.netOps.getAccountTxsB (
                 *raAccount, uLedgerMin, uLedgerMax, bDescending, offset, limit,
                 isUnlimited (context.role));
@@ -162,11 +169,13 @@ Json::Value doAccountTxOld (RPC::Context& context)
                         = bValidated
                         && uValidatedMin <= uLedgerIndex
                         && uValidatedMax >= uLedgerIndex;
-
+                ++transCount;
             }
+            perf::end(trace, "binary");
         }
         else
         {
+            perf::start(trace, "text");
             auto txns = context.netOps.getAccountTxs (
                 *raAccount, uLedgerMin, uLedgerMax, bDescending, offset, limit,
                 isUnlimited (context.role));
@@ -191,10 +200,13 @@ Json::Value doAccountTxOld (RPC::Context& context)
                             = bValidated
                             && uValidatedMin <= uLedgerIndex
                             && uValidatedMax >= uLedgerIndex;
+                    ++transCount;
                 }
 
             }
+            perf::end(trace, "text");
         }
+        perf::add(trace, "tx_count", transCount);
 
         //Add information about the original query
         ret[jss::ledger_index_min] = uLedgerMin;
