@@ -277,6 +277,10 @@ to_string(ValStatus m)
         // Attempt to acquire a specific ledger.
         boost::optional<Ledger> acquire(Ledger::ID const & ledgerID);
 
+        // Validation parameters
+        ValidationParms const&
+        parms() const;
+
         // ... implementation specific
     };
     @endcode
@@ -324,9 +328,6 @@ class Validations
 
     // Set of ledgers being acquired from the network
     hash_map<ID, hash_set<NodeKey>> acquiring_;
-
-    // Parameters to determine validation staleness
-    ValidationParms const parms_;
 
     // Adaptor instance
     // Is NOT managed by the mutex_ above
@@ -477,7 +478,10 @@ private:
         {
             // Check for staleness
             if (!isCurrent(
-                    parms_, t, it->second.signTime(), it->second.seenTime()))
+                    adaptor_.parms(),
+                    t,
+                    it->second.signTime(),
+                    it->second.seenTime()))
             {
                 removeTrie(lock, it->first, it->second);
                 adaptor_.onStale(std::move(it->second));
@@ -523,16 +527,14 @@ private:
 public:
     /** Constructor
 
-        @param p ValidationParms to control staleness/expiration of validaitons
         @param c Clock to use for expiring validations stored by ledger
         @param ts Parameters for constructing Adaptor instance
     */
     template <class... Ts>
     Validations(
-        ValidationParms const& p,
         beast::abstract_clock<std::chrono::steady_clock>& c,
         Ts&&... ts)
-        : byLedger_(c), parms_(p), adaptor_(std::forward<Ts>(ts)...)
+        : byLedger_(c), adaptor_(std::forward<Ts>(ts)...)
     {
     }
 
@@ -542,14 +544,6 @@ public:
     adaptor() const
     {
         return adaptor_;
-    }
-
-    /** Return the validation timing parameters
-     */
-    ValidationParms const&
-    parms() const
-    {
-        return parms_;
     }
 
     /** Add a new validation
@@ -566,7 +560,11 @@ public:
     ValStatus
     add(NodeKey const& key, Validation const& val)
     {
-        if (!isCurrent(parms_, adaptor_.now(), val.signTime(), val.seenTime()))
+        if (!isCurrent(
+                adaptor_.parms(),
+                adaptor_.now(),
+                val.signTime(),
+                val.seenTime()))
             return ValStatus::stale;
 
         {
@@ -578,7 +576,7 @@ public:
             {
                 auto const now = byLedger_.clock().now();
                 FullSeqEnforcer<Seq>& enforcer = fullSeqEnforcers_[key];
-                if (!enforcer.tryAdvance(now, val.seq(), parms_))
+                if (!enforcer.tryAdvance(now, val.seq(), adaptor_.parms()))
                     return ValStatus::badFullSeq;
             }
 
@@ -621,7 +619,7 @@ public:
     expire()
     {
         ScopedLock lock{mutex_};
-        beast::expire(byLedger_, parms_.validationSET_EXPIRES);
+        beast::expire(byLedger_, adaptor_.parms().validationSET_EXPIRES);
     }
 
     Json::Value

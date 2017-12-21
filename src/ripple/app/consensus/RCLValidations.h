@@ -221,9 +221,17 @@ public:
         return j_;
     }
 
+    ValidationParms const&
+    parms() const
+    {
+        return parms_;
+    }
+
 private:
     using ScopedLockType = std::lock_guard<Mutex>;
     using ScopedUnlockType = GenericScopedUnlock<Mutex>;
+
+    ValidationParms const parms_;
 
     Application& app_;
     beast::Journal j_;

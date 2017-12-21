@@ -825,7 +825,9 @@ RCLConsensus::Adaptor::validate(RCLCxLedger const& ledger, bool proposing)
     // satisfied
     const bool isFull = proposing &&
         fullSeqEnforcer_.tryAdvance(
-            stopwatch().now(), ledger.seq(), app_.getValidations().parms());
+            stopwatch().now(),
+            ledger.seq(),
+            app_.getValidations().adaptor().parms());
 
     // Build validation
     auto v = std::make_shared<STValidation>(

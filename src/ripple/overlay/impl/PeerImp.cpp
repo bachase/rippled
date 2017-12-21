@@ -1562,10 +1562,11 @@ PeerImp::onMessage (std::shared_ptr <protocol::TMValidation> const& m)
             val->setSeen (closeTime);
         }
 
-        if (! isCurrent(app_.getValidations().parms(),
-            app_.timeKeeper().closeTime(),
-            val->getSignTime(),
-            val->getSeenTime()))
+        if (!isCurrent(
+                app_.getValidations().adaptor().parms(),
+                app_.timeKeeper().closeTime(),
+                val->getSignTime(),
+                val->getSeenTime()))
         {
             JLOG(p_journal_.trace()) << "Validation: Not current";
             fee_ = Resource::feeUnwantedData;

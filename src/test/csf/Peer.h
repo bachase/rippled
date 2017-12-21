@@ -115,7 +115,6 @@ struct Peer
     class ValAdaptor
     {
         Peer& p_;
-
     public:
         struct Mutex
         {
@@ -159,6 +158,12 @@ struct Peer
             if(Ledger const * ledger = p_.acquireLedger(id))
                 return *ledger;
             return boost::none;
+        }
+
+        ValidationParms const &
+        parms() const
+        {
+            return p_.validationParms;
         }
     };
 
@@ -204,6 +209,7 @@ struct Peer
     hash_map<Ledger::ID, Ledger> ledgers;
 
     //! Validations from trusted nodes
+    ValidationParms validationParms;
     Validations<ValAdaptor> validations;
 
     //! The most recent ledger that has been fully validated by the network from
@@ -286,7 +292,7 @@ struct Peer
         , net{n}
         , trustGraph(tg)
         , lastClosedLedger{Ledger::MakeGenesis{}}
-        , validations{ValidationParms{}, s.clock(), *this}
+        , validations{s.clock(), *this}
         , fullyValidatedLedger{Ledger::MakeGenesis{}}
         , collectors{c}
     {
@@ -577,7 +583,9 @@ struct Peer
                 // Can only send one fully validated ledger per seq
                 bool isFull = proposing &&
                     fullSeqEnforcer.tryAdvance(
-                        scheduler.now(), newLedger.seq(), validations.parms());
+                        scheduler.now(),
+                        newLedger.seq(),
+                        validations.adaptor().parms());
 
                 Validation v{newLedger.id(),
                              newLedger.seq(),

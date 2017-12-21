@@ -179,6 +179,7 @@ class Validations_test : public beast::unit_test::suite
         StaleData& staleData_;
         clock_type& c_;
         LedgerOracle& oracle_;
+        ValidationParms parms_;
 
     public:
         // Non-locking mutex to avoid locks in generic Validations
@@ -226,6 +227,12 @@ class Validations_test : public beast::unit_test::suite
         {
             return oracle_.lookup(id);
         }
+
+        ValidationParms const&
+        parms() const
+        {
+            return parms_;
+        }
     };
 
     // Specialize generic Validations using the above types
@@ -236,14 +243,13 @@ class Validations_test : public beast::unit_test::suite
     class TestHarness
     {
         StaleData staleData_;
-        ValidationParms p_;
         beast::manual_clock<std::chrono::steady_clock> clock_;
         TestValidations tv_;
         PeerID nextNodeId_{0};
 
     public:
         TestHarness(LedgerOracle& o)
-            : tv_(p_, clock_, staleData_, clock_, o)
+            : tv_(clock_, staleData_, clock_, o)
         {
         }
 
@@ -269,7 +275,7 @@ class Validations_test : public beast::unit_test::suite
         ValidationParms
         parms() const
         {
-            return p_;
+            return tv_.adaptor().parms();
         }
 
         auto&
