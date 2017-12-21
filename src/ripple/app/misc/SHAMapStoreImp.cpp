@@ -541,7 +541,9 @@ SHAMapStoreImp::clearSql (DatabaseCon& database,
     LedgerIndex min = std::numeric_limits <LedgerIndex>::max();
 
     {
+        auto trace = perf::makeTrace("txndblock", 4);
         auto db = database.checkoutDb ();
+        perf::add(trace, "locked");
         boost::optional<std::uint64_t> m;
         *db << minQuery, soci::into(m);
         if (!m)
@@ -560,7 +562,9 @@ SHAMapStoreImp::clearSql (DatabaseCon& database,
     {
         min = std::min(lastRotated, min + setup_.deleteBatch);
         {
+            auto trace = perf::makeTrace("txndblock", 5);
             auto db =  database.checkoutDb ();
+            perf::add(trace, "locked");
             *db << boost::str (formattedDeleteQuery % min);
         }
         if (health())

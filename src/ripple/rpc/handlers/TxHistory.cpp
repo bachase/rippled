@@ -59,7 +59,9 @@ Json::Value doTxHistory (RPC::Context& context)
                     % startIndex);
 
     {
+        auto trace = perf::makeTrace("txndblock", 8);
         auto db = context.app.getTxnDB ().checkoutDb ();
+        perf::add(trace, "locked");
 
         boost::optional<std::uint64_t> ledgerSeq;
         boost::optional<std::string> status;

@@ -197,7 +197,9 @@ accountTxPage (
     }
 
     {
+        auto trace = perf::makeTrace("txndblock", 6);
         auto db (connection.checkoutDb());
+        perf::add(trace, "locked");
 
         Blob rawData;
         Blob rawMeta;

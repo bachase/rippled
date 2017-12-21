@@ -128,7 +128,9 @@ Transaction::pointer Transaction::load(uint256 const& id, Application& app)
     boost::optional<std::string> status;
     Blob rawTxn;
     {
+        auto trace = perf::makeTrace("txndblock", 7);
         auto db = app.getTxnDB ().checkoutDb ();
+        perf::add(trace, "locked");
         soci::blob sociRawTxnBlob (*db);
         soci::indicator rti;
 

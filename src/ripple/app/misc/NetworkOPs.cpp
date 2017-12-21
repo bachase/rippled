@@ -1966,7 +1966,9 @@ NetworkOPs::AccountTxs NetworkOPsImp::getAccountTxs (
         bUnlimited);
 
     {
+        auto trace = perf::makeTrace("txndblock", 2);
         auto db = app_.getTxnDB ().checkoutDb ();
+        perf::add(trace, "locked");
 
         boost::optional<std::uint64_t> ledgerSeq;
         boost::optional<std::string> status;
@@ -2034,7 +2036,9 @@ std::vector<NetworkOPsImp::txnMetaLedgerType> NetworkOPsImp::getAccountTxsB (
         bUnlimited);
 
     {
+        auto trace = perf::makeTrace("txndblock", 3);
         auto db = app_.getTxnDB ().checkoutDb ();
+        perf::add(trace, "locked");
 
         boost::optional<std::uint64_t> ledgerSeq;
         boost::optional<std::string> status;

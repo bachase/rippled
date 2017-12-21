@@ -879,7 +879,9 @@ static bool saveValidatedLedger (
     }
 
     {
+        auto trace = perf::makeTrace("txndblock", 1);
         auto db = app.getTxnDB ().checkoutDb ();
+        perf::add(trace, "locked");
 
         soci::transaction tr(*db);
 
