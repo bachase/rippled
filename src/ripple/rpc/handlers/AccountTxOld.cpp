@@ -156,6 +156,7 @@ Json::Value doAccountTxOld (RPC::Context& context)
                 *raAccount, uLedgerMin, uLedgerMax, bDescending, offset, limit,
                 isUnlimited (context.role));
 
+            perf::start(trace, "transactions");
             for (auto it = txns.begin (), end = txns.end (); it != end; ++it)
             {
                 ++count;
@@ -171,6 +172,7 @@ Json::Value doAccountTxOld (RPC::Context& context)
                         && uValidatedMax >= uLedgerIndex;
                 ++transCount;
             }
+            perf::end(trace, "transactions");
             perf::end(trace, "binary");
         }
         else
@@ -180,6 +182,7 @@ Json::Value doAccountTxOld (RPC::Context& context)
                 *raAccount, uLedgerMin, uLedgerMax, bDescending, offset, limit,
                 isUnlimited (context.role));
 
+            perf::start(trace, "transactions");
             for (auto it = txns.begin (), end = txns.end (); it != end; ++it)
             {
                 ++count;
@@ -204,6 +207,7 @@ Json::Value doAccountTxOld (RPC::Context& context)
                 }
 
             }
+            perf::end(trace, "transactions");
             perf::end(trace, "text");
         }
         perf::add(trace, "tx_count", transCount);
