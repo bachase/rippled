@@ -110,7 +110,7 @@ makeCollectors(Cs&... cs)
     CollectorType should be default constructible.
 */
 template <class CollectorType>
-struct CollectByNode
+struct CollectByPeer
 {
     std::map<PeerID, CollectorType> byNode;
 
@@ -730,6 +730,27 @@ struct JumpCollector
         if (e.ledger.parentID() != e.prior.id())
             fullyValidatedJumps.emplace_back(
                 Jump{who, when, e.prior, e.ledger});
+    }
+};
+
+/** Collects all Share<V> events emitted in the simulation
+ */
+template <class V>
+struct ShareCollector
+{
+    std::vector<V> shared;
+
+    // Ignore most events by default
+    template <class E>
+    void
+    on(PeerID, SimTime, E const& e)
+    {
+    }
+
+    void
+    on(PeerID who, SimTime when, Share<V> const& e)
+    {
+        shared.push_back(e.val);
     }
 };
 
