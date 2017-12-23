@@ -261,7 +261,11 @@ accountTxPage (
 
                 // Work around a bug that could leave the metadata missing
                 if (rawMeta.size() == 0)
-                    onUnsavedLedger(ledgerSeq.value_or (0));
+                {
+                    perf::start(trace, "onUnsavedLedger");
+                    onUnsavedLedger(ledgerSeq.value_or(0));
+                    perf::end(trace, "onUnsavedLedger");
+                }
 
                 perf::start(trace, "onTransaction");
                 onTransaction(rangeCheckedCast<std::uint32_t>(ledgerSeq.value_or (0)),
