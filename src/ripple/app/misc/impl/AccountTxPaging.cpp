@@ -211,15 +211,20 @@ accountTxPage (
         soci::blob txnMeta (*db);
         soci::indicator dataPresent, metaPresent;
 
+        perf::start(trace, "prepare");
         soci::statement st = (db->prepare << sql,
             soci::into (ledgerSeq),
             soci::into (txnSeq),
             soci::into (status),
             soci::into (txnData, dataPresent),
             soci::into (txnMeta, metaPresent));
+        perf::end(trace, "prepare");
 
+        perf::start(trace, "execute");
         st.execute ();
+        perf::end(trace, "execute");
 
+        perf::start(trace, "fetch");
         while (st.fetch ())
         {
             if (lookingForMarker)
@@ -259,6 +264,7 @@ accountTxPage (
                 --numberOfResults;
             }
         }
+        perf::end(trace, "fetch");
     }
 
     return;
