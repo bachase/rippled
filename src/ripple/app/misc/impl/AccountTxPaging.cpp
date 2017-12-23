@@ -227,6 +227,7 @@ accountTxPage (
         perf::start(trace, "fetch");
         while (st.fetch ())
         {
+            perf::start(trace, "fetch1");
             if (lookingForMarker)
             {
                 if (findLedger == ledgerSeq.value_or (0) &&
@@ -240,8 +241,11 @@ accountTxPage (
                 token = Json::objectValue;
                 token[jss::ledger] = rangeCheckedCast<std::uint32_t>(ledgerSeq.value_or (0));
                 token[jss::seq] = txnSeq.value_or (0);
+                perf::add(trace, "numberOfResultsIs0");
+                perf::end(trace, "fetch1");
                 break;
             }
+            perf::end(trace, "fetch1");
 
             if (!lookingForMarker)
             {
@@ -259,8 +263,10 @@ accountTxPage (
                 if (rawMeta.size() == 0)
                     onUnsavedLedger(ledgerSeq.value_or (0));
 
+                perf::start(trace, "onTransaction");
                 onTransaction(rangeCheckedCast<std::uint32_t>(ledgerSeq.value_or (0)),
                     *status, rawData, rawMeta);
+                perf::end(trace, "onTransaction");
                 --numberOfResults;
             }
         }
