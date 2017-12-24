@@ -12,6 +12,7 @@
 #include <functional>
 #include <sstream>
 #include <string>
+#include <sstream>
 
 #include <string.h>
 
@@ -97,8 +98,10 @@ void sqlite3_statement_backend::reset()
 
 // This is used by bulk operations
 statement_backend::exec_fetch_result
-sqlite3_statement_backend::load_rowset(int totalRows)
+sqlite3_statement_backend::load_rowset(int totalRows,
+    std::shared_ptr<ripple::perf::Trace> const& trace)
 {
+    ripple::perf::start(trace, "load_rowset");
     statement_backend::exec_fetch_result retVal = ef_success;
 
     int i = 0;
@@ -116,6 +119,7 @@ sqlite3_statement_backend::load_rowset(int totalRows)
     else
         numCols = static_cast<int>(columns_.size());
 
+    ripple::perf::add(trace, "A");
 
     if (!databaseReady_)
     {
@@ -125,12 +129,14 @@ sqlite3_statement_backend::load_rowset(int totalRows)
     {
         // make the vector big enough to hold the data we need
         dataCache_.resize(totalRows);
+        ripple::perf::add(trace, "B");
         for (sqlite3_recordset::iterator it = dataCache_.begin(),
             end = dataCache_.end(); it != end; ++it)
         {
             (*it).resize(numCols);
         }
 
+        ripple::perf::add(trace, "C");
         for (i = 0; i < totalRows && databaseReady_; ++i)
         {
             int const res = sqlite3_step(stmt_);
@@ -196,13 +202,18 @@ sqlite3_statement_backend::load_rowset(int totalRows)
                 std::ostringstream ss;
                 ss << "sqlite3_statement_backend::loadRS: "
                    << zErrMsg;
-                throw sqlite3_soci_error(ss.str(), res);
+                ripple::perf::end(trace, "load_rowset");
+                std::stringstream sstr;
+                ss << "throwing " << zErrMsg;
+                ripple::perf::add(trace, sstr.str());
+                throw sqlite3_soci_error(sstr.str(), res);
             }
         }
     }
     // if we read less than requested then shrink the vector
     dataCache_.resize(i);
 
+    ripple::perf::end(trace, "load_rowset");
     return retVal;
 }
 

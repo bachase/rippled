@@ -16,6 +16,7 @@
 #include "soci/use.h"
 #include "soci/soci-backend.h"
 #include "soci/row.h"
+#include <ripple/basics/Trace.h>
 // std
 #include <cstddef>
 #include <string>
@@ -64,7 +65,7 @@ public:
     void undefine_and_bind();
     bool execute(bool withDataExchange = false);
     long long get_affected_rows();
-    bool fetch();
+    bool fetch(std::shared_ptr<ripple::perf::Trace> const& trace=nullptr);
     void describe();
     void set_row(row * r);
     void exchange_for_rowset(into_type_ptr const & i) { exchange_for_rowset_(i); }
@@ -221,9 +222,9 @@ public:
         return impl_->get_affected_rows();
     }
 
-    bool fetch()
+    bool fetch(std::shared_ptr<ripple::perf::Trace> const& trace=nullptr)
     {
-        gotData_ = impl_->fetch();
+        gotData_ = impl_->fetch(trace);
         return gotData_;
     }
 

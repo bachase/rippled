@@ -14,6 +14,7 @@
 #include "soci-compiler.h"
 #include <ctime>
 #include <cctype>
+#include <ripple/basics/Trace.h>
 
 using namespace soci;
 using namespace soci::details;
@@ -370,7 +371,7 @@ long long statement_impl::get_affected_rows()
     }
 }
 
-bool statement_impl::fetch()
+bool statement_impl::fetch(std::shared_ptr<ripple::perf::Trace> const& trace)
 {
     try
     {
@@ -404,7 +405,9 @@ bool statement_impl::fetch()
             fetchSize_ = newFetchSize;
         }
 
+        ripple::perf::start(trace, "fetching", fetchSize_);
         statement_backend::exec_fetch_result const res = backEnd_->fetch(static_cast<int>(fetchSize_));
+        ripple::perf::end(trace, "fetching");
         if (res == statement_backend::ef_success)
         {
             // the "success" means that some number of rows was read

@@ -1966,7 +1966,7 @@ NetworkOPs::AccountTxs NetworkOPsImp::getAccountTxs (
         bUnlimited);
 
     {
-        auto trace = perf::makeTrace("txndblock", 2);
+        auto trace = perf::sharedTrace("txndblock", 2);
         auto db = app_.getTxnDB ().checkoutDb ();
         perf::add(trace, "locked");
 
@@ -1984,8 +1984,10 @@ NetworkOPs::AccountTxs NetworkOPsImp::getAccountTxs (
                  soci::into(sociTxnMetaBlob, tmi));
 
         st.execute ();
-        while (st.fetch ())
+        perf::start(trace, "fetch");
+        while (st.fetch (trace))
         {
+            perf::add(trace, "fetchloop");
             if (soci::i_ok == rti)
                 convert(sociTxnBlob, rawTxn);
             else
@@ -2017,6 +2019,7 @@ NetworkOPs::AccountTxs NetworkOPsImp::getAccountTxs (
                     txn->getID (), txn->getLedger (), txnMeta,
                         app_.journal("TxMeta")));
         }
+        perf::end(trace, "fetch");
     }
 
     return ret;
@@ -2036,7 +2039,7 @@ std::vector<NetworkOPsImp::txnMetaLedgerType> NetworkOPsImp::getAccountTxsB (
         bUnlimited);
 
     {
-        auto trace = perf::makeTrace("txndblock", 3);
+        auto trace = perf::sharedTrace("txndblock", 3);
         auto db = app_.getTxnDB ().checkoutDb ();
         perf::add(trace, "locked");
 
@@ -2053,8 +2056,10 @@ std::vector<NetworkOPsImp::txnMetaLedgerType> NetworkOPsImp::getAccountTxsB (
                  soci::into(sociTxnMetaBlob, tmi));
 
         st.execute ();
-        while (st.fetch ())
+        perf::start(trace, "fetch");
+        while (st.fetch (trace))
         {
+            perf::add(trace, "fetchloop");
             Blob rawTxn;
             if (soci::i_ok == rti)
                 convert (sociTxnBlob, rawTxn);
@@ -2068,6 +2073,7 @@ std::vector<NetworkOPsImp::txnMetaLedgerType> NetworkOPsImp::getAccountTxsB (
             ret.emplace_back (
                 strHex (rawTxn), strHex (txnMeta), seq);
         }
+        perf::end(trace, "fetch");
     }
 
     return ret;

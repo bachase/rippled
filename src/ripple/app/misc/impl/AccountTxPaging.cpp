@@ -197,7 +197,7 @@ accountTxPage (
     }
 
     {
-        auto trace = perf::makeTrace("txndblock", 6);
+        auto trace = perf::sharedTrace("txndblock", 6);
         auto db (connection.checkoutDb());
         perf::add(trace, "locked");
 
@@ -211,23 +211,19 @@ accountTxPage (
         soci::blob txnMeta (*db);
         soci::indicator dataPresent, metaPresent;
 
-        perf::start(trace, "prepare");
         soci::statement st = (db->prepare << sql,
             soci::into (ledgerSeq),
             soci::into (txnSeq),
             soci::into (status),
             soci::into (txnData, dataPresent),
             soci::into (txnMeta, metaPresent));
-        perf::end(trace, "prepare");
 
-        perf::start(trace, "execute");
         st.execute ();
-        perf::end(trace, "execute");
 
         perf::start(trace, "fetch");
-        while (st.fetch ())
+        while (st.fetch (trace))
         {
-            perf::start(trace, "fetch1");
+            perf::add(trace, "fetchloop");
             if (lookingForMarker)
             {
                 if (findLedger == ledgerSeq.value_or (0) &&
@@ -241,11 +237,8 @@ accountTxPage (
                 token = Json::objectValue;
                 token[jss::ledger] = rangeCheckedCast<std::uint32_t>(ledgerSeq.value_or (0));
                 token[jss::seq] = txnSeq.value_or (0);
-                perf::add(trace, "numberOfResultsIs0");
-                perf::end(trace, "fetch1");
                 break;
             }
-            perf::end(trace, "fetch1");
 
             if (!lookingForMarker)
             {
@@ -261,16 +254,10 @@ accountTxPage (
 
                 // Work around a bug that could leave the metadata missing
                 if (rawMeta.size() == 0)
-                {
-                    perf::start(trace, "onUnsavedLedger");
                     onUnsavedLedger(ledgerSeq.value_or(0));
-                    perf::end(trace, "onUnsavedLedger");
-                }
 
-                perf::start(trace, "onTransaction");
                 onTransaction(rangeCheckedCast<std::uint32_t>(ledgerSeq.value_or (0)),
                     *status, rawData, rawMeta);
-                perf::end(trace, "onTransaction");
                 --numberOfResults;
             }
         }

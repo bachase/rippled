@@ -26,6 +26,7 @@
 #include <cstdarg>
 #include <vector>
 #include <soci/soci-backend.h>
+#include <ripple/basics/Trace.h>
 
 // Disable flood of nonsense warnings generated for SQLite
 #ifdef _MSC_VER
@@ -241,7 +242,8 @@ struct sqlite3_statement_backend : details::statement_backend
     long long rowsAffectedBulk_; // number of rows affected by the last bulk operation
 
 private:
-    exec_fetch_result load_rowset(int totalRows);
+    exec_fetch_result load_rowset(int totalRows,
+        std::shared_ptr<ripple::perf::Trace> const& trace=nullptr);
     exec_fetch_result load_one();
     exec_fetch_result bind_and_execute(int number);
 };
