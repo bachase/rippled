@@ -785,13 +785,14 @@ public:
         assert (mLedgerDB.get () == nullptr);
         assert (mWalletDB.get () == nullptr);
 
+        int poolSize = m_jobQueue->getThreadCount();
         DatabaseCon::Setup setup = setup_DatabaseCon (*config_);
         mTxnDB = std::make_unique <DatabaseCon> (setup, "transaction.db",
-                TxnDBInit, TxnDBCount);
+                TxnDBInit, TxnDBCount, poolSize);
         mLedgerDB = std::make_unique <DatabaseCon> (setup, "ledger.db",
-                LedgerDBInit, LedgerDBCount);
+                LedgerDBInit, LedgerDBCount, poolSize);
         mWalletDB = std::make_unique <DatabaseCon> (setup, "wallet.db",
-                WalletDBInit, WalletDBCount);
+                WalletDBInit, WalletDBCount, poolSize);
 
         return
             mTxnDB.get () != nullptr &&
@@ -1092,11 +1093,11 @@ bool ApplicationImp::setup()
     if (validatorKeys_.publicKey.size())
         setMaxDisallowedLedger();
 
-    getLedgerDB ().getSession ()
+    *(getLedgerDB ().checkoutDb ())
         << boost::str (boost::format ("PRAGMA cache_size=-%d;") %
                         (config_->getSize (siLgrDBCache) * 1024));
 
-    getTxnDB ().getSession ()
+    *(getTxnDB ().checkoutDb ())
             << boost::str (boost::format ("PRAGMA cache_size=-%d;") %
                             (config_->getSize (siTxnDBCache) * 1024));
 
@@ -1825,7 +1826,7 @@ getSchema (DatabaseCon& dbc, std::string const& dbName)
     sql += "';";
 
     std::string r;
-    soci::statement st = (dbc.getSession ().prepare << sql,
+    soci::statement st = (dbc.checkoutDb ()->prepare << sql,
                           soci::into(r));
     st.execute ();
     while (st.fetch ())
@@ -1858,7 +1859,7 @@ void ApplicationImp::addTxnSeqField ()
 
     JLOG (m_journal.warn()) << "Transaction sequence field is missing";
 
-    auto& session = getTxnDB ().getSession ();
+    auto session = getTxnDB ().checkoutDb ();
 
     std::vector< std::pair<uint256, int> > txIDs;
     txIDs.reserve (300000);
@@ -1868,12 +1869,12 @@ void ApplicationImp::addTxnSeqField ()
     uint256 transID;
 
     boost::optional<std::string> strTransId;
-    soci::blob sociTxnMetaBlob(session);
+    soci::blob sociTxnMetaBlob(*session);
     soci::indicator tmi;
     Blob txnMeta;
 
     soci::statement st =
-            (session.prepare <<
+            (session->prepare <<
              "SELECT TransID, TxnMeta FROM Transactions;",
              soci::into(strTransId),
              soci::into(sociTxnMetaBlob, tmi));
@@ -1908,19 +1909,19 @@ void ApplicationImp::addTxnSeqField ()
 
     JLOG (m_journal.info()) << "All " << i << " transactions read";
 
-    soci::transaction tr(session);
+    soci::transaction tr(*session);
 
     JLOG (m_journal.info()) << "Dropping old index";
-    session << "DROP INDEX AcctTxIndex;";
+    *session << "DROP INDEX AcctTxIndex;";
 
     JLOG (m_journal.info()) << "Altering table";
-    session << "ALTER TABLE AccountTransactions ADD COLUMN TxnSeq INTEGER;";
+    *session << "ALTER TABLE AccountTransactions ADD COLUMN TxnSeq INTEGER;";
 
     boost::format fmt ("UPDATE AccountTransactions SET TxnSeq = %d WHERE TransID = '%s';");
     i = 0;
     for (auto& t : txIDs)
     {
-        session << boost::str (fmt % t.second % to_string (t.first));
+        *session << boost::str (fmt % t.second % to_string (t.first));
 
         if ((++i % 1000) == 0)
         {
@@ -1929,7 +1930,7 @@ void ApplicationImp::addTxnSeqField ()
     }
 
     JLOG (m_journal.info()) << "Building new index";
-    session << "CREATE INDEX AcctTxIndex ON AccountTransactions(Account, LedgerSeq, TxnSeq, TransID);";
+    *session << "CREATE INDEX AcctTxIndex ON AccountTransactions(Account, LedgerSeq, TxnSeq, TransID);";
 
     tr.commit ();
 }
@@ -1945,23 +1946,23 @@ void ApplicationImp::addValidationSeqFields ()
     JLOG(m_journal.warn()) << "Validation sequence fields are missing";
     assert(!schemaHas(getLedgerDB(), "Validations", 0, "InitialSeq", m_journal));
 
-    auto& session = getLedgerDB().getSession();
+    auto session = getLedgerDB().checkoutDb();
 
-    soci::transaction tr(session);
+    soci::transaction tr(*session);
 
     JLOG(m_journal.info()) << "Altering table";
-    session << "ALTER TABLE Validations "
+    *session << "ALTER TABLE Validations "
         "ADD COLUMN LedgerSeq       BIGINT UNSIGNED;";
-    session << "ALTER TABLE Validations "
+    *session << "ALTER TABLE Validations "
         "ADD COLUMN InitialSeq      BIGINT UNSIGNED;";
 
     // Create the indexes, too, so we don't have to
     // wait for the next startup, which may be a while.
     // These should be identical to those in LedgerDBInit
     JLOG(m_journal.info()) << "Building new indexes";
-    session << "CREATE INDEX IF NOT EXISTS "
+    *session << "CREATE INDEX IF NOT EXISTS "
         "ValidationsBySeq ON Validations(LedgerSeq);";
-    session << "CREATE INDEX IF NOT EXISTS ValidationsByInitialSeq "
+    *session << "CREATE INDEX IF NOT EXISTS ValidationsByInitialSeq "
         "ON Validations(InitialSeq, LedgerSeq);";
 
     tr.commit();

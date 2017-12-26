@@ -30,6 +30,7 @@ const char* TxnDBInit[] =
     "PRAGMA journal_mode=WAL;",
     "PRAGMA journal_size_limit=1582080;",
     "PRAGMA max_page_count=2147483646;",
+    "PRAGMA busy_timeout=60000;",
 
 #if (ULONG_MAX > UINT_MAX) && !defined (NO_SQLITE_MMAP)
     "PRAGMA mmap_size=17179869184;",
@@ -74,6 +75,7 @@ const char* LedgerDBInit[] =
     "PRAGMA synchronous=NORMAL;",
     "PRAGMA journal_mode=WAL;",
     "PRAGMA journal_size_limit=1582080;",
+    "PRAGMA busy_timeout=60000;",
 
     "BEGIN TRANSACTION;",
 
