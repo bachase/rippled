@@ -33,7 +33,7 @@ namespace soci {
 
 namespace ripple {
 
-template<class T, class TMutex>
+    template<class T, class TMutex>
 class LockedPointer
 {
 public:
@@ -87,25 +87,34 @@ public:
     DatabaseCon (Setup const& setup,
                  std::string const& name,
                  const char* initString[],
-                 int countInit);
+                 int countInit,
+                 int poolSize);
 
     soci::session& getSession()
     {
         return session_;
     }
 
+#if 1
+    std::unique_ptr<soci::session> checkoutDb ()
+    {
+        return std::make_unique<soci::session>(connections_);
+    }
+#else
     LockedSociSession checkoutDb ()
     {
         return LockedSociSession (&session_, lock_);
     }
+#endif
 
     void setupCheckpointing (JobQueue*, Logs&);
 
 private:
-    LockedSociSession::mutex lock_;
 
+    LockedSociSession::mutex lock_;
     soci::session session_;
     std::unique_ptr<Checkpointer> checkpointer_;
+    soci::connection_pool connections_;
 };
 
 DatabaseCon::Setup

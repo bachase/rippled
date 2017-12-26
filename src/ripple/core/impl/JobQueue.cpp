@@ -175,6 +175,12 @@ JobQueue::setThreadCount (int c, bool const standaloneMode)
     m_workers.setNumberOfThreads (c);
 }
 
+int
+JobQueue::getThreadCount() const
+{
+    return m_workers.getNumberOfThreads();
+}
+
 std::unique_ptr<LoadEvent>
 JobQueue::makeLoadEvent (JobType t, std::string const& name)
 {

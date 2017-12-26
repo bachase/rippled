@@ -781,13 +781,14 @@ public:
         assert (mLedgerDB.get () == nullptr);
         assert (mWalletDB.get () == nullptr);
 
+        int poolSize = m_jobQueue->getThreadCount();
         DatabaseCon::Setup setup = setup_DatabaseCon (*config_);
         mTxnDB = std::make_unique <DatabaseCon> (setup, "transaction.db",
-                TxnDBInit, TxnDBCount);
+                TxnDBInit, TxnDBCount, poolSize);
         mLedgerDB = std::make_unique <DatabaseCon> (setup, "ledger.db",
-                LedgerDBInit, LedgerDBCount);
+                LedgerDBInit, LedgerDBCount, poolSize);
         mWalletDB = std::make_unique <DatabaseCon> (setup, "wallet.db",
-                WalletDBInit, WalletDBCount);
+                WalletDBInit, WalletDBCount, poolSize);
 
         return
             mTxnDB.get () != nullptr &&
