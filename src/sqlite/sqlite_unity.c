@@ -2,11 +2,11 @@
 /*
   This file is part of rippled: https://github.com/ripple/rippled
   Copyright (c) 2012-2015 Ripple Labs Inc.
-  
+
   Permission to use, copy, modify, and/or distribute this software for any
   purpose  with  or without fee is hereby granted, provided that the above
   copyright notice and this permission notice appear in all copies.
-  
+
   THE  SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
   WITH  REGARD  TO  THIS  SOFTWARE  INCLUDING  ALL  IMPLIED  WARRANTIES  OF
   MERCHANTABILITY  AND  FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -38,7 +38,7 @@
 
    VFALCO NOTE This implies a global mutex!
 */
-#define SQLITE_THREADSAFE 1
+//#define SQLITE_THREADSAFE 1
 
 /* When compiled with SQLITE_THREADSAFE=2, SQLite can be used in a
    multithreaded program so long as no two threads attempt to use the
@@ -46,7 +46,7 @@
 
    VFALCO NOTE This is the preferred threading model.
 */
-//#define SQLITE_THREADSAFE 2
+#define SQLITE_THREADSAFE 2
 
 #if defined RIPPLE_SQLITE_USE_NDEBUG && !defined (NDEBUG)
 #define NDEBUG
