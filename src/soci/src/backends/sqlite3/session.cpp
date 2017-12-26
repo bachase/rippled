@@ -57,7 +57,7 @@ sqlite3_session_backend::sqlite3_session_backend(
     connection_parameters const & parameters)
 {
     int timeout = 0;
-    int connection_flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
+    int connection_flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI ;
     std::string synchronous;
     std::string const & connectString = parameters.get_connect_string();
     std::string dbname(connectString);

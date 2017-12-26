@@ -183,6 +183,8 @@ public:
     void setThreadCount (int c, bool const standaloneMode,
                          bool const validator=true);
 
+    int getThreadCount () const;
+
     /** Return a scoped LoadEvent.
     */
     std::unique_ptr <LoadEvent>

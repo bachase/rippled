@@ -30,29 +30,55 @@ DatabaseCon::DatabaseCon (
     Setup const& setup,
     std::string const& strName,
     const char* initStrings[],
-    int initCount)
+    int initCount,
+    int poolSize)
+    : connections_{poolSize}
 {
     auto const useTempFiles  // Use temporary files or regular DB files?
         = setup.standAlone &&
           setup.startUp != Config::LOAD &&
           setup.startUp != Config::LOAD_FILE &&
           setup.startUp != Config::REPLAY;
-    boost::filesystem::path pPath = useTempFiles
-        ? "" : (setup.dataDir / strName);
 
-    open (session_, "sqlite", pPath.string());
+    static int uid = 0;
+    std::string path;
+    if (!useTempFiles)
+        path = (setup.dataDir / strName).string();
+    else
+        path = "file:" + std::to_string(uid++) + strName +
+            "?mode=memory&cache=shared";
+
+    open (session_, "sqlite", path);
 
     for (int i = 0; i < initCount; ++i)
     {
         try
         {
-            soci::statement st = session_.prepare <<
-                initStrings[i];
+            soci::statement st = session_.prepare << initStrings[i];
             st.execute(true);
         }
         catch (soci::soci_error&)
         {
             // ignore errors
+        }
+    }
+
+    for (int i = 0; i < poolSize; ++i)
+    {
+        soci::session& s = connections_.at(i);
+        open(s, "sqlite", path);
+
+        for (int i = 0; i < initCount; ++i)
+        {
+            try
+            {
+                soci::statement st = s.prepare << initStrings[i];
+                st.execute(true);
+            }
+            catch (soci::soci_error&)
+            {
+                // ignore errors
+            }
         }
     }
 }

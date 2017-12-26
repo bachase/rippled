@@ -76,17 +76,17 @@ Json::Value doGetCounts (RPC::Context& context)
         ret [it.first] = it.second;
     }
 
-    int dbKB = getKBUsedAll (context.app.getLedgerDB ().getSession ());
+    int dbKB = getKBUsedAll (*context.app.getLedgerDB ().checkoutDb ());
 
     if (dbKB > 0)
         ret[jss::dbKBTotal] = dbKB;
 
-    dbKB = getKBUsedDB (context.app.getLedgerDB ().getSession ());
+    dbKB = getKBUsedDB (*context.app.getLedgerDB ().checkoutDb ());
 
     if (dbKB > 0)
         ret[jss::dbKBLedger] = dbKB;
 
-    dbKB = getKBUsedDB (context.app.getTxnDB ().getSession ());
+    dbKB = getKBUsedDB (*context.app.getTxnDB ().checkoutDb ());
 
     if (dbKB > 0)
         ret[jss::dbKBTransaction] = dbKB;
