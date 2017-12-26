@@ -219,21 +219,25 @@ sqlite3_statement_backend::load_rowset(int totalRows,
 
 // This is used for non-bulk operations
 statement_backend::exec_fetch_result
-sqlite3_statement_backend::load_one()
+sqlite3_statement_backend::load_one(std::shared_ptr<ripple::perf::Trace> const& trace)
 {
     if( !databaseReady_ )
         return ef_no_data;
 
     statement_backend::exec_fetch_result retVal = ef_success;
+    ripple::perf::start(trace, "sqlite3_step");
     int const res = sqlite3_step(stmt_);
+    ripple::perf::end(trace, "sqlite3_step");
 
     if (SQLITE_DONE == res)
     {
         databaseReady_ = false;
         retVal = ef_no_data;
+        ripple::perf::add(trace, "load_one 2");
     }
     else if (SQLITE_ROW == res)
     {
+        ripple::perf::add(trace, "load_one 3");
     }
     else
     {
@@ -242,6 +246,7 @@ sqlite3_statement_backend::load_one()
         std::ostringstream ss;
         ss << "sqlite3_statement_backend::loadOne: "
             << zErrMsg;
+        ripple::perf::add(trace, ss.str());
         throw sqlite3_soci_error(ss.str(), res);
     }
     return retVal;
@@ -359,12 +364,13 @@ sqlite3_statement_backend::execute(int number)
 }
 
 statement_backend::exec_fetch_result
-sqlite3_statement_backend::fetch(int number)
+sqlite3_statement_backend::fetch(int number,
+    std::shared_ptr<ripple::perf::Trace> const& trace)
 {
     if (number > 1)
         return load_rowset(number);
     else
-        return load_one();
+        return load_one(trace);
 
 }
 

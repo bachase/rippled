@@ -15,6 +15,8 @@
 #include <map>
 #include <string>
 #include <sstream>
+#include <memory>
+#include <ripple/basics/Trace.h>
 
 namespace soci
 {
@@ -187,7 +189,8 @@ public:
     };
 
     virtual exec_fetch_result execute(int number) = 0;
-    virtual exec_fetch_result fetch(int number) = 0;
+    virtual exec_fetch_result fetch(int number,
+        std::shared_ptr<ripple::perf::Trace> const& trace=nullptr) = 0;
 
     virtual long long get_affected_rows() = 0;
     virtual int get_number_of_rows() = 0;

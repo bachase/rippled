@@ -212,7 +212,7 @@ struct sqlite3_statement_backend : details::statement_backend
     void reset();
 
     exec_fetch_result execute(int number) SOCI_OVERRIDE;
-    exec_fetch_result fetch(int number) SOCI_OVERRIDE;
+    exec_fetch_result fetch(int number, std::shared_ptr<ripple::perf::Trace> const& trace=nullptr) SOCI_OVERRIDE;
 
     long long get_affected_rows() SOCI_OVERRIDE;
     int get_number_of_rows() SOCI_OVERRIDE;
@@ -244,7 +244,8 @@ struct sqlite3_statement_backend : details::statement_backend
 private:
     exec_fetch_result load_rowset(int totalRows,
         std::shared_ptr<ripple::perf::Trace> const& trace=nullptr);
-    exec_fetch_result load_one();
+    exec_fetch_result load_one(
+        std::shared_ptr<ripple::perf::Trace> const& trace=nullptr);
     exec_fetch_result bind_and_execute(int number);
 };
 
