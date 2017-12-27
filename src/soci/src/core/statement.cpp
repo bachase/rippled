@@ -406,7 +406,7 @@ bool statement_impl::fetch(std::shared_ptr<ripple::perf::Trace> const& trace)
         }
 
         ripple::perf::start(trace, "fetching", fetchSize_);
-        statement_backend::exec_fetch_result const res = backEnd_->fetch(static_cast<int>(fetchSize_));
+        statement_backend::exec_fetch_result const res = backEnd_->fetch(static_cast<int>(fetchSize_), trace);
         ripple::perf::end(trace, "fetching");
         if (res == statement_backend::ef_success)
         {
