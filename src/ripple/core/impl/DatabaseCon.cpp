@@ -67,7 +67,6 @@ DatabaseCon::DatabaseCon (
     {
         soci::session& s = connections_.at(i);
         open(s, "sqlite", path);
-
         for (int i = 0; i < initCount; ++i)
         {
             try
@@ -75,7 +74,7 @@ DatabaseCon::DatabaseCon (
                 soci::statement st = s.prepare << initStrings[i];
                 st.execute(true);
             }
-            catch (soci::soci_error&)
+            catch (soci::soci_error& e)
             {
                 // ignore errors
             }

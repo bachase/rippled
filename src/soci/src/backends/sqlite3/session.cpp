@@ -128,7 +128,7 @@ sqlite3_session_backend::~sqlite3_session_backend()
 
 void sqlite3_session_backend::begin()
 {
-    execude_hardcoded(conn_, "BEGIN", "Cannot begin transaction.");
+    execude_hardcoded(conn_, "BEGIN IMMEDIATE", "Cannot begin transaction.");
 }
 
 void sqlite3_session_backend::commit()
