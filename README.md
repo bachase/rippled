@@ -1,10 +1,11 @@
+# What is Ripple?
+
 ![Ripple](/images/ripple.png)
 
-**Do you work at a digital asset exchange or wallet provider?** 
+> **Do you work at a digital asset exchange or wallet provider?** 
+>
+> Please [contact us](mailto:support@ripple.com). We can help guide your integration.
 
-Please [contact us](mailto:support@ripple.com). We can help guide your integration.
-
-# What is Ripple?
 Ripple is a network of computers which use the [Ripple consensus algorithm](https://www.youtube.com/watch?v=pj1QVb1vlC0) to atomically settle and record
 transactions on a secure distributed database, the Ripple Consensus Ledger
 (RCL). Because of its distributed nature, the RCL offers transaction immutability
