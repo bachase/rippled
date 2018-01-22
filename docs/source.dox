@@ -170,7 +170,7 @@ EXCLUDE_SYMBOLS        =
 EXAMPLE_PATH           =
 EXAMPLE_PATTERNS       =
 EXAMPLE_RECURSIVE      = NO
-IMAGE_PATH             = ./images/
+IMAGE_PATH             = ./images/ ./images/consensus/
 INPUT_FILTER           =
 FILTER_PATTERNS        =
 FILTER_SOURCE_FILES    = NO
@@ -209,15 +209,7 @@ HTML_HEADER            =
 HTML_FOOTER            =
 HTML_STYLESHEET        =
 HTML_EXTRA_STYLESHEET  =
-HTML_EXTRA_FILES       = ./images/consensus/block_chain.png \
-                         ./images/consensus/consensus_modes.png \
-                         ./images/consensus/consensus_overview.png \
-                         ./images/consensus/disputes.png \
-                         ./images/consensus/ledger_chain.png \
-                         ./images/consensus/threshold.png \
-                         ./images/consensus/EffCloseTime.png \
-
-
+HTML_EXTRA_FILES       =
 HTML_COLORSTYLE_HUE    = 220
 HTML_COLORSTYLE_SAT    = 100
 HTML_COLORSTYLE_GAMMA  = 80
