@@ -6,6 +6,7 @@ PROJECT_NAME           = "rippled"
 PROJECT_NUMBER         =
 PROJECT_BRIEF          = C++ Library
 PROJECT_LOGO           =
+PROJECT_LOGO           = images/LogoForDocumentation.png
 OUTPUT_DIRECTORY       =
 CREATE_SUBDIRS         = NO
 ALLOW_UNICODE_NAMES    = NO
@@ -125,18 +126,18 @@ INPUT                  = \
     ../src/ripple/app/tx/impl/InvariantCheck.h \
     ../src/ripple/app/consensus/RCLValidations.h \
     ../src/README.md \
+    ../src/ripple/README.md \
     ../README.md \
     ../RELEASENOTES.md \
-    ../doc/CodingStyle.md \
-    ../src/ripple/README.md \
-    ../doc/CheatSheet.md \
+    ../docs/CodingStyle.md \
+    ../docs/CheatSheet.md \
     ../docs/README.md \
-    ../doc/sample_chart.doc \
-    ../doc/HeapProfiling.md \
+    ../docs/sample_chart.doc \
+    ../docs/HeapProfiling.md \
+    ../docs/Docker.md \
+    ../docs/consensus.md \
     ../Builds/XCode/README.md \
     ../Builds/VisualStudio2015/README.md \
-    ../doc/Docker.md \
-    ../doc/consensus.md \
     ../src/ripple/consensus/README.md \
     ../src/ripple/app/consensus/README.md \
     ../src/test/csf/README.md \
