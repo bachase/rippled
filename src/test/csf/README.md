@@ -16,7 +16,7 @@ the simulation, a ledger is simply a set of observed integers and transactions
 are single integers. The consensus process works to agree on the set of integers
 to include in the next ledger.
 
-![CSF Overview](./csf_overview.png "CSF Overview")
+![CSF Overview](/docs/images/consensus/csf_overview.png "CSF Overview")
 
 The diagram above gives a stylized overview of the components provided by the
 framework. These are combined by the simulation author into the simulation
@@ -49,7 +49,7 @@ Below is a basic simulation we can walk through to get an understanding of the
 framework. This simulation is for a set of 5 validators that aren't directly
 connected but rely on a single hub node for communication.
 
-![Example Sim](./csf_graph.png "Example Sim")
+![Example Sim](/docs/images/consensus/csf_graph.png "Example Sim")
 
 Each Peer has a unique transaction submitted, then runs one round of the
 consensus algorithm.
