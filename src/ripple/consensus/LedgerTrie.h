@@ -642,7 +642,6 @@ public:
         @param largestIssued The sequence number of the largest validation
                              issued by this node.
         @return Pair with the seqeuence number and ID of the preferred ledger
-
     */
     std::pair<Seq,ID>
     getPreferred(Seq const largestIssued) const
@@ -651,28 +650,48 @@ public:
 
         bool done = false;
 
+        std::uint32_t uncommitted = 0;
+        auto uncommittedIt = seqSupport.begin();
+
         while (curr && !done)
         {
             // Within a single span, the preferred by branch strategy is simply
             // to continue along the span as long as the branch support of
-            // the next ledger exceeds the uncommited support at the next
-            // ledger's sequence number, with the caveat that uncommited
-            // support includes any validators whose most recently validated
-            // ledger is less than largestIssued.
+            // the next ledger exceeds the uncommited support for that ledger.
+            {
+                // Add any initial uncommited support prior for ledgers
+                // earlier than nextSeq or earlier than largestIssued
+                Seq nextSeq = curr->span.start() + Seq{1};
+                while (uncommittedIt != seqSupport.end() &&
+                       uncommittedIt->first < std::max(nextSeq, largestIssued))
+                {
+                    uncommitted += uncommittedIt->second;
+                    uncommittedIt++;
+                }
 
-            Seq currSeq = curr->span.start() + Seq{1};
-            while (currSeq < curr->span.end() &&
-                   curr->branchSupport >
-                       uncommittedSupport(std::max(currSeq, largestIssued)))
-                currSeq += Seq{1};
+                // Advance nextSeq along the span
+                while (nextSeq < curr->span.end() &&
+                       curr->branchSupport > uncommitted)
+                {
+                    // Jump to the next seqSupport change
+                    if (uncommittedIt != seqSupport.end() &&
+                        uncommittedIt->first < curr->span.end())
+                    {
+                        nextSeq = uncommittedIt->first + Seq{1};
+                        uncommitted += uncommittedIt->second;
+                        uncommittedIt++;
+                    }
+                    else // otherwise we jump to the end of the span
+                        nextSeq = curr->span.end();
+                }
+                // We did not consume the entire span, so we have found the
+                // preferred ledger
+                if (nextSeq < curr->span.end())
+                    return curr->span.before(nextSeq)->tip();
+            }
 
-            // We did not consume the entire span, so we have found the
-            // preferred ledger
-            if(currSeq < curr->span.end())
-                return curr->span.before(currSeq)->tip();
-
-            // We have reached the end of the current span, see if there is
-            // a child branch we can pick
+            // We have reached the end of the current span, so we need to
+            // find the best child
             Node* best = nullptr;
             std::uint32_t margin = 0;
             if (curr->children.size() == 1)
@@ -704,9 +723,6 @@ public:
                 if (best->span.startID() > curr->children[1]->span.startID())
                     margin++;
             }
-
-            std::uint32_t const uncommitted =
-                uncommittedSupport(std::max(currSeq, largestIssued));
 
             // If the best child has margin exceeding the uncommited support,
             // continue from that child, otherwise we are done
