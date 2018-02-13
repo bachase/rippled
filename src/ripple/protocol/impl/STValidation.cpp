@@ -26,11 +26,13 @@
 
 namespace ripple {
 
-STValidation::STValidation (SerialIter& sit, bool checkSignature)
-    : STObject (getFormat (), sit, sfValidation)
+STValidation::STValidation(
+    SerialIter& sit,
+    std::function<NodeID(PublicKey const &)> const& lookupNodeID,
+    bool checkSignature)
+    : STObject(getFormat(), sit, sfValidation)
 {
-    mNodeID = calcNodeID(
-        PublicKey(makeSlice (getFieldVL (sfSigningPubKey))));
+    mNodeID = lookupNodeID(PublicKey(makeSlice(getFieldVL(sfSigningPubKey))));
     assert (mNodeID.isNonZero ());
 
     if  (checkSignature && !isValid ())
@@ -41,20 +43,19 @@ STValidation::STValidation (SerialIter& sit, bool checkSignature)
     }
 }
 
-STValidation::STValidation (
-        uint256 const& ledgerHash,
-        NetClock::time_point signTime,
-        PublicKey const& publicKey,
-        bool isFull)
-    : STObject (getFormat (), sfValidation)
-    , mSeen (signTime)
+STValidation::STValidation(
+    uint256 const& ledgerHash,
+    NetClock::time_point signTime,
+    PublicKey const& publicKey,
+    NodeID const& nodeID,
+    bool isFull)
+    : STObject(getFormat(), sfValidation), mNodeID(nodeID), mSeen(signTime)
 {
     // Does not sign
     setFieldH256 (sfLedgerHash, ledgerHash);
     setFieldU32 (sfSigningTime, signTime.time_since_epoch().count());
 
     setFieldVL (sfSigningPubKey, publicKey.slice());
-    mNodeID = calcNodeID(publicKey);
     assert (mNodeID.isNonZero ());
 
     if (isFull)

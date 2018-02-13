@@ -1610,8 +1610,13 @@ PeerImp::onMessage (std::shared_ptr <protocol::TMValidation> const& m)
         STValidation::pointer val;
         {
             SerialIter sit (makeSlice(m->validation()));
-            val = std::make_shared <
-                STValidation> (std::ref (sit), false);
+            val = std::make_shared<STValidation>(
+                std::ref(sit),
+                [this](PublicKey const& pk) {
+                    return calcNodeID(
+                        app_.validatorManifests().getMasterKey(pk));
+                },
+                false);
             val->setSeen (closeTime);
         }
 

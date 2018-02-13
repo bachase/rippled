@@ -81,7 +81,7 @@ RCLConsensus::Adaptor::Adaptor(
         , localTxs_(localTxs)
         , inboundTransactions_{inboundTransactions}
         , j_(journal)
-        , nodeID_{calcNodeID(app.nodeIdentity().first)}
+        , nodeID_{validatorKeys.nodeID}
         , valPublic_{validatorKeys.publicKey}
         , valSecret_{validatorKeys.secretKey}
 {
@@ -837,6 +837,7 @@ RCLConsensus::Adaptor::validate(RCLCxLedger const& ledger, bool proposing)
         ledger.id(),
         validationTime,
         valPublic_,
+        nodeID_,
         proposing /* full if proposed */);
     v->setFieldU32(sfLedgerSequence, ledger.seq());
 

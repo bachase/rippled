@@ -21,9 +21,10 @@
 #define RIPPLE_PROTOCOL_STVALIDATION_H_INCLUDED
 
 #include <ripple/protocol/PublicKey.h>
-#include <ripple/protocol/SecretKey.h>
 #include <ripple/protocol/STObject.h>
+#include <ripple/protocol/SecretKey.h>
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 namespace ripple {
@@ -46,14 +47,42 @@ public:
         kFullFlag = 0x1
     };
 
-    // These throw if the object is not valid
-    STValidation (SerialIter & sit, bool checkSignature = true);
+    /** Construct a STValidation from a peer.
 
-    // Does not sign the validation
+        Construct an STValidation from serialized data previously shared by a
+        peer.
+
+        @param sit Iterator over serialized data
+        @param lookupNodeID Find the Node ID based on the public key used to
+                            sign the validation. For manifest based validators,
+                            this should be the NodeID of the master public key.
+        @param checkSignature Whether to verify the data was signed properly
+
+        @note Throws if the object is not valid
+    */
+    STValidation(
+        SerialIter& sit,
+        std::function<NodeID(PublicKey const &)> const& lookupNodeID,
+        bool checkSignature = true);
+
+    /** Construct a new STValidation
+
+        Constructs a new STValidation issued by a node. The instance should be
+        signed before sharing with other nodes.
+
+        @param ledgerHash The hash of the validated ledger
+        @param signTime When the validation is signed
+        @param raPub The current signing public key
+        @param nodeID ID corresponding to nodes public master key
+        @param isFull Whether the validation is full or partial
+
+    */
+
     STValidation (
         uint256 const& ledgerHash,
         NetClock::time_point signTime,
         PublicKey const& raPub,
+        NodeID const& nodeID,
         bool isFull);
 
     STBase*
