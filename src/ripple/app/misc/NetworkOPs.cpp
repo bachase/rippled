@@ -293,8 +293,7 @@ public:
     // Ledger proposal/close functions.
     void processTrustedProposal (
         RCLCxPeerPos proposal,
-        std::shared_ptr<protocol::TMProposeSet> set,
-        NodeID const &node) override;
+        std::shared_ptr<protocol::TMProposeSet> set) override;
 
     bool recvValidation (
         STValidation::ref val, std::string const& source) override;
@@ -1453,8 +1452,7 @@ uint256 NetworkOPsImp::getConsensusLCL ()
 
 void NetworkOPsImp::processTrustedProposal (
     RCLCxPeerPos peerPos,
-    std::shared_ptr<protocol::TMProposeSet> set,
-    NodeID const& node)
+    std::shared_ptr<protocol::TMProposeSet> set)
 {
     if (mConsensus.peerProposal(
             app_.timeKeeper().closeTime(), peerPos))
