@@ -1433,10 +1433,10 @@ bool NetworkOPsImp::beginConsensus (uint256 const& networkClosed)
     assert (closingInfo.parentHash ==
             m_ledgerMaster.getClosedLedger()->info().hash);
 
-    app_.validators().onConsensusStart (
-        app_.getValidations().getCurrentPublicKeys ());
+    TrustChanges const changes = app_.validators().onConsensusStart(
+        app_.getValidations().getCurrentPublicKeys());
 
-    mConsensus.startRound (
+    mConsensus.startRound(
         app_.timeKeeper().closeTime(),
         networkClosed,
         prevLedger);

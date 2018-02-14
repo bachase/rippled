@@ -60,6 +60,14 @@ enum class ListDisposition
 std::string
 to_string(ListDisposition disposition);
 
+/** Changes in trusted nodes after updating validator list
+*/
+struct TrustChanges
+{
+    hash_set<NodeID> added;
+    hash_set<NodeID> removed;
+};
+
 /**
     Trusted Validators List
     -----------------------
@@ -210,12 +218,15 @@ public:
         @param seenValidators Set of public keys used to sign recently
         received validations
 
+        @return TrustedKeyChanges instance with newly trusted or untrusted
+        master public keys.
+
         @par Thread Safety
 
         May be called concurrently
     */
     template<class KeySet>
-    void
+    TrustChanges
     onConsensusStart (
         KeySet const& seenValidators);
 
@@ -394,7 +405,7 @@ private:
 //------------------------------------------------------------------------------
 
 template<class KeySet>
-void
+TrustChanges
 ValidatorList::onConsensusStart (
     KeySet const& seenValidators)
 {
@@ -493,20 +504,29 @@ ValidatorList::onConsensusStart (
     else if (! allListsAvailable)
         quorum = std::numeric_limits<std::size_t>::max();
 
-    trustedKeys_.clear();
-    quorum_ = quorum;
-
-    for (auto const& val : boost::adaptors::reverse (rankedKeys))
+    TrustChanges trustChanges;
+    hash_set<PublicKey> newTrustedKeys;
+    for (auto const& val : boost::adaptors::reverse(rankedKeys))
     {
-        if (size <= trustedKeys_.size())
+        if (size <= newTrustedKeys.size())
             break;
+        newTrustedKeys.insert(val.second);
 
-        trustedKeys_.insert (val.second);
+        if (trustedKeys_.count(val.second) == 0)
+            trustChanges.added.insert(calcNodeID(val.second));
     }
 
-    JLOG (j_.debug()) <<
-        "Using quorum of " << quorum_ << " for new set of " <<
-        trustedKeys_.size() << " trusted validators";
+    for(auto const& k : trustedKeys_)
+        if(newTrustedKeys.count(k) == 0)
+            trustChanges.removed.insert(calcNodeID(k));
+
+    quorum_ = quorum;
+    std::swap(newTrustedKeys, trustedKeys_);
+
+    JLOG(j_.debug()) << "Using quorum of " << quorum_ << " for new set of "
+                     << trustedKeys_.size() << " trusted validators ("
+                     << trustChanges.added.size() << " added, "
+                     << trustChanges.removed.size() << " removed)";
 
     if (trustedKeys_.size() < quorum_)
     {
@@ -515,6 +535,8 @@ ValidatorList::onConsensusStart (
             " exceeds the number of trusted validators (" <<
             trustedKeys_.size() << ")";
     }
+
+    return trustChanges;
 }
 
 } // ripple
