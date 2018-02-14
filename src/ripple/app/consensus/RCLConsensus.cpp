@@ -981,10 +981,11 @@ void
 RCLConsensus::startRound(
     NetClock::time_point const& now,
     RCLCxLedger::ID const& prevLgrId,
-    RCLCxLedger const& prevLgr)
+    RCLCxLedger const& prevLgr,
+    hash_set<NodeID> const& nowUntrusted)
 {
     ScopedLockType _{mutex_};
     consensus_.startRound(
-        now, prevLgrId, prevLgr, adaptor_.preStartRound(prevLgr));
+        now, prevLgrId, prevLgr, nowUntrusted, adaptor_.preStartRound(prevLgr));
 }
 }

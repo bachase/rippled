@@ -875,8 +875,10 @@ struct Peer
 
         issue(StartRound{bestLCL, lastClosedLedger});
 
+        // Not yet modeling dynamic UNL.
+        hash_set<PeerID> nowUntrusted;
         consensus.startRound(
-            now(), bestLCL, lastClosedLedger, runAsValidator);
+            now(), bestLCL, lastClosedLedger, nowUntrusted, runAsValidator);
     }
 
     // Start the consensus process assuming it is not yet running
@@ -895,7 +897,7 @@ struct Peer
     {
         // We don't care about the actual epochs, but do want the
         // generated NetClock time to be well past its epoch to ensure
-        // any subtractions of two NetClock::time_point in the consensu
+        // any subtractions of two NetClock::time_point in the consensus
         // code are positive. (e.g. proposeFRESHNESS)
         using namespace std::chrono;
         using namespace std::chrono_literals;

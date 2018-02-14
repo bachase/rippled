@@ -1439,7 +1439,8 @@ bool NetworkOPsImp::beginConsensus (uint256 const& networkClosed)
     mConsensus.startRound(
         app_.timeKeeper().closeTime(),
         networkClosed,
-        prevLedger);
+        prevLedger,
+        changes.removed);
 
     JLOG(m_journal.debug()) << "Initiating consensus engine";
     return true;
