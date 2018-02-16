@@ -30,22 +30,22 @@
 namespace ripple {
 
 // Validation flags
-const std::uint32_t vfFullyCanonicalSig    = 0x80000000; // signature is fully canonical
+const std::uint32_t vfFullyCanonicalSig =
+    0x80000000;  // signature is fully canonical
 
-class STValidation final
-    : public STObject
-    , public CountedObject <STValidation>
+class STValidation final : public STObject, public CountedObject<STValidation>
 {
 public:
-    static char const* getCountedObjectName () { return "STValidation"; }
+    static char const*
+    getCountedObjectName()
+    {
+        return "STValidation";
+    }
 
     using pointer = std::shared_ptr<STValidation>;
-    using ref     = const std::shared_ptr<STValidation>&;
+    using ref = const std::shared_ptr<STValidation>&;
 
-    enum
-    {
-        kFullFlag = 0x1
-    };
+    enum { kFullFlag = 0x1 };
 
     /** Construct a STValidation from a peer.
 
@@ -62,7 +62,7 @@ public:
     */
     STValidation(
         SerialIter& sit,
-        std::function<NodeID(PublicKey const &)> const& lookupNodeID,
+        std::function<NodeID(PublicKey const&)> const& lookupNodeID,
         bool checkSignature = true);
 
     /** Construct a new STValidation
@@ -78,7 +78,7 @@ public:
 
     */
 
-    STValidation (
+    STValidation(
         uint256 const& ledgerHash,
         NetClock::time_point signTime,
         PublicKey const& raPub,
@@ -86,53 +86,87 @@ public:
         bool isFull);
 
     STBase*
-    copy (std::size_t n, void* buf) const override
+    copy(std::size_t n, void* buf) const override
     {
         return emplace(n, buf, *this);
     }
 
     STBase*
-    move (std::size_t n, void* buf) override
+    move(std::size_t n, void* buf) override
     {
         return emplace(n, buf, std::move(*this));
     }
 
-    uint256         getLedgerHash ()     const;
-    NetClock::time_point getSignTime ()  const;
-    NetClock::time_point getSeenTime ()  const;
-    std::uint32_t   getFlags ()          const;
-    PublicKey       getSignerPublic ()   const;
-    NodeID          getNodeID ()         const
+    uint256
+    getLedgerHash() const;
+
+    NetClock::time_point
+    getSignTime() const;
+
+    NetClock::time_point
+    getSeenTime() const;
+
+    std::uint32_t
+    getFlags() const;
+
+    PublicKey
+    getSignerPublic() const;
+
+    NodeID
+    getNodeID() const
     {
         return mNodeID;
     }
-    bool            isValid ()           const;
-    bool            isFull ()            const;
-    bool            isTrusted ()         const
+
+    bool
+    isValid() const;
+
+    bool
+    isFull() const;
+
+    bool
+    isTrusted() const
     {
         return mTrusted;
     }
-    uint256         getSigningHash ()    const;
-    bool            isValid (uint256 const& ) const;
 
-    void            setTrusted ()
+    uint256
+    getSigningHash() const;
+
+    bool
+    isValid(uint256 const&) const;
+
+    void
+    setTrusted()
     {
         mTrusted = true;
     }
-    void            setSeen (NetClock::time_point s)
+
+    void
+    setUntrusted()
+    {
+        mTrusted = false;
+    }
+
+    void
+    setSeen(NetClock::time_point s)
     {
         mSeen = s;
     }
-    Blob    getSerialized ()             const;
-    Blob    getSignature ()              const;
+
+    Blob
+    getSerialized() const;
+
+    Blob
+    getSignature() const;
 
     // Signs the validation and returns the signing hash
-    uint256 sign (SecretKey const& secretKey);
+    uint256
+    sign(SecretKey const& secretKey);
 
 private:
-    static SOTemplate const& getFormat ();
-
-    void setNode ();
+    static SOTemplate const&
+    getFormat();
 
     NodeID mNodeID;
     bool mTrusted = false;

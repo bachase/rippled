@@ -226,6 +226,12 @@ to_string(ValStatus m)
         // arrived
         bool trusted() const;
 
+        // Set the validation as trusted
+        void setTrusted();
+
+        // Set the validation as untrusted
+        void setUntrusted();
+
         // Whether this is a full or partial validation
         bool full() const;
 
@@ -626,6 +632,50 @@ public:
     {
         ScopedLock lock{mutex_};
         beast::expire(byLedger_, parms_.validationSET_EXPIRES);
+    }
+
+    /** Update trust status of validations
+
+        Updates the trusted status of known validations to account for nodes
+        that have been added or removed from the UNL. This also updates the trie
+        to ensure only currently trusted nodes' validations are used.
+
+        @param added Identifiers of nodes that are now trusted
+        @param removed Identifiers of nodes that are no longer trusted
+    */
+    void
+    trustChanged(hash_set<NodeID> const& added, hash_set<NodeID> const& removed)
+    {
+        ScopedLock lock{mutex_};
+
+        for (auto& it : current_)
+        {
+            if (added.count(it.first))
+            {
+                it.second.setTrusted();
+                updateTrie(lock, it.first, it.second, boost::none);
+            }
+            else if (removed.count(it.first))
+            {
+                it.second.setUntrusted();
+                removeTrie(lock, it.first, it.second);
+            }
+        }
+
+        for (auto& it : byLedger_)
+        {
+            for (auto& nodeVal : it.second)
+            {
+                if (added.count(nodeVal.first))
+                {
+                    nodeVal.second.setTrusted();
+                }
+                else if (removed.count(nodeVal.first))
+                {
+                    nodeVal.second.setUntrusted();
+                }
+            }
+        }
     }
 
     Json::Value

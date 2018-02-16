@@ -1436,6 +1436,9 @@ bool NetworkOPsImp::beginConsensus (uint256 const& networkClosed)
     TrustChanges const changes = app_.validators().onConsensusStart(
         app_.getValidations().getCurrentNodeIDs());
 
+    if (!changes.added.empty() || !changes.removed.empty())
+        app_.getValidations().trustChanged(changes.added, changes.removed);
+
     mConsensus.startRound(
         app_.timeKeeper().closeTime(),
         networkClosed,

@@ -101,7 +101,19 @@ public:
         return val_->isTrusted();
     }
 
-    /// Whether the validatioon is full (not-partial)
+    void
+    setTrusted()
+    {
+        val_->setTrusted();
+    }
+
+    void
+    setUntrusted()
+    {
+        val_->setUntrusted();
+    }
+
+    /// Whether the validation is full (not-partial)
     bool
     full() const
     {
