@@ -214,7 +214,7 @@ public:
         @param remaining The remaining validations to flush
     */
     void
-    flush(hash_map<PublicKey, RCLValidation>&& remaining);
+    flush(hash_map<NodeID, RCLValidation>&& remaining);
 
     /** Attempt to acquire the ledger with given id from the network */
     boost::optional<RCLValidatedLedger>

@@ -149,7 +149,7 @@ struct Peer
         }
 
         void
-        flush(hash_map<PeerKey, Validation>&& remaining)
+        flush(hash_map<PeerID, Validation>&& remaining)
         {
         }
 
@@ -681,7 +681,7 @@ struct Peer
     {
         v.setTrusted();
         v.setSeen(now());
-        ValStatus const res = validations.add(v.key(), v);
+        ValStatus const res = validations.add(v.nodeID(), v);
 
         if(res == ValStatus::stale || res == ValStatus::repeatID)
             return false;

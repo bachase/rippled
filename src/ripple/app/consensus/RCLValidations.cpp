@@ -172,7 +172,7 @@ RCLValidationsAdaptor::onStale(RCLValidation&& v)
 }
 
 void
-RCLValidationsAdaptor::flush(hash_map<PublicKey, RCLValidation>&& remaining)
+RCLValidationsAdaptor::flush(hash_map<NodeID, RCLValidation>&& remaining)
 {
     bool anyNew = false;
     {
@@ -317,7 +317,7 @@ handleNewValidation(Application& app,
     // masterKey is seated only if validator is trusted or listed
     if (masterKey)
     {
-        ValStatus const outcome = validations.add(*masterKey, val);
+        ValStatus const outcome = validations.add(calcNodeID(*masterKey), val);
         if(j.debug())
             dmp(j.debug(), to_string(outcome));
 

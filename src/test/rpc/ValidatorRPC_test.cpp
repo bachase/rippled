@@ -308,9 +308,9 @@ public:
 
             env.app().validatorSites().start();
             env.app().validatorSites().join();
-            std::set<PublicKey> startKeys;
+            hash_set<NodeID> startKeys;
             for (auto const& val : validators)
-                startKeys.insert(val.masterPublic);
+                startKeys.insert(calcNodeID(val.masterPublic));
 
             env.app().validators().onConsensusStart(startKeys);
 

@@ -169,7 +169,7 @@ class Validations_test : public beast::unit_test::suite
     struct StaleData
     {
         std::vector<Validation> stale;
-        hash_map<PeerKey, Validation> flushed;
+        hash_map<PeerID, Validation> flushed;
     };
 
     // Generic Validations adaptor that saves stale/flushed data into
@@ -216,7 +216,7 @@ class Validations_test : public beast::unit_test::suite
         }
 
         void
-        flush(hash_map<PeerKey, Validation>&& remaining)
+        flush(hash_map<PeerID, Validation>&& remaining)
         {
             staleData_.flushed = std::move(remaining);
         }
@@ -250,8 +250,7 @@ class Validations_test : public beast::unit_test::suite
         ValStatus
         add(Validation const& v)
         {
-            PeerKey masterKey{v.nodeID(), 0};
-            return tv_.add(masterKey, v);
+            return tv_.add(v.nodeID(), v);
         }
 
         TestValidations&
@@ -284,7 +283,7 @@ class Validations_test : public beast::unit_test::suite
             return staleData_.stale;
         }
 
-        hash_map<PeerKey, Validation> const&
+        hash_map<PeerID, Validation> const&
         flushed() const
         {
             return staleData_.flushed;
@@ -462,7 +461,7 @@ class Validations_test : public beast::unit_test::suite
 
         std::vector<Trigger> triggers = {
             [&](TestValidations& vals) { vals.currentTrusted(); },
-            [&](TestValidations& vals) { vals.getCurrentPublicKeys(); },
+            [&](TestValidations& vals) { vals.getCurrentNodeIDs(); },
             [&](TestValidations& vals) { vals.getPreferred(genesisLedger); },
             [&](TestValidations& vals) {
                 vals.getNodesAfter(ledgerA, ledgerA.id());
@@ -610,9 +609,9 @@ class Validations_test : public beast::unit_test::suite
                 ValStatus::current == harness.add(node.validate(ledgerA)));
 
         {
-            hash_set<PeerKey> const expectedKeys = {a.masterKey(),
-                                                    b.masterKey()};
-            BEAST_EXPECT(harness.vals().getCurrentPublicKeys() == expectedKeys);
+            hash_set<PeerID> const expectedKeys = {a.nodeID(),
+                                                    b.nodeID()};
+            BEAST_EXPECT(harness.vals().getCurrentNodeIDs() == expectedKeys);
         }
 
         harness.clock().advance(3s);
@@ -626,14 +625,14 @@ class Validations_test : public beast::unit_test::suite
                 ValStatus::current == harness.add(node.partial(ledgerAC)));
 
         {
-            hash_set<PeerKey> const expectedKeys = {a.masterKey(),
-                                                    b.masterKey()};
-            BEAST_EXPECT(harness.vals().getCurrentPublicKeys() == expectedKeys);
+            hash_set<PeerID> const expectedKeys = {a.nodeID(),
+                                                    b.nodeID()};
+            BEAST_EXPECT(harness.vals().getCurrentNodeIDs() == expectedKeys);
         }
 
         // Pass enough time for them to go stale
         harness.clock().advance(harness.parms().validationCURRENT_LOCAL);
-        BEAST_EXPECT(harness.vals().getCurrentPublicKeys().empty());
+        BEAST_EXPECT(harness.vals().getCurrentNodeIDs().empty());
     }
 
     void
@@ -786,21 +785,21 @@ class Validations_test : public beast::unit_test::suite
         Ledger ledgerA = h["a"];
         Ledger ledgerAB = h["ab"];
 
-        hash_map<PeerKey, Validation> expected;
+        hash_map<PeerID, Validation> expected;
         for (auto const& node : {a, b, c})
         {
             auto const val = node.validate(ledgerA);
             BEAST_EXPECT(ValStatus::current == harness.add(val));
-            expected.emplace(node.masterKey(), val);
+            expected.emplace(node.nodeID(), val);
         }
-        Validation staleA = expected.find(a.masterKey())->second;
+        Validation staleA = expected.find(a.nodeID())->second;
 
         // Send in a new validation for a, saving the new one into the expected
         // map after setting the proper prior ledger ID it replaced
         harness.clock().advance(1s);
         auto newVal = a.validate(ledgerAB);
         BEAST_EXPECT(ValStatus::current == harness.add(newVal));
-        expected.find(a.masterKey())->second = newVal;
+        expected.find(a.nodeID())->second = newVal;
 
         // Now flush
         harness.vals().flush();

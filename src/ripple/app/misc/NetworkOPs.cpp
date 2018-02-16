@@ -1434,7 +1434,7 @@ bool NetworkOPsImp::beginConsensus (uint256 const& networkClosed)
             m_ledgerMaster.getClosedLedger()->info().hash);
 
     TrustChanges const changes = app_.validators().onConsensusStart(
-        app_.getValidations().getCurrentPublicKeys());
+        app_.getValidations().getCurrentNodeIDs());
 
     mConsensus.startRound(
         app_.timeKeeper().closeTime(),
