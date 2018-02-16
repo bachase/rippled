@@ -718,7 +718,7 @@ class Validations_test : public beast::unit_test::suite
             if (val.trusted())
                 trustedValidations[val.ledgerID()].emplace_back(val);
         }
-        // d diagrees
+        // d disagrees
         {
             auto const val = d.validate(ledgerB);
             BEAST_EXPECT(ValStatus::current == harness.add(val));
@@ -1056,6 +1056,96 @@ class Validations_test : public beast::unit_test::suite
     }
 
     void
+    testTrustChanged()
+    {
+        testcase("TrustChanged");
+        using namespace std::chrono;
+
+        auto checker = [this](
+                           TestValidations& vals,
+                           hash_set<PeerID> const& listed,
+                           std::vector<Validation> const& trustedVals) {
+            Ledger::ID testID = trustedVals.empty() ? genesisLedger.id()
+                                                    : trustedVals[0].ledgerID();
+            BEAST_EXPECT(vals.currentTrusted() == trustedVals);
+            BEAST_EXPECT(vals.getCurrentNodeIDs() == listed);
+            BEAST_EXPECT(
+                vals.getNodesAfter(genesisLedger, genesisLedger.id()) ==
+                trustedVals.size());
+            BEAST_EXPECT(vals.getPreferred(genesisLedger).second == testID);
+            BEAST_EXPECT(vals.getTrustedForLedger(testID) == trustedVals);
+            BEAST_EXPECT(
+                vals.numTrustedForLedger(testID) == trustedVals.size());
+        };
+
+        {
+            // Trusted to untrusted
+            LedgerHistoryHelper h;
+            TestHarness harness(h.oracle);
+            Node a = harness.makeNode();
+            Ledger ledgerAB = h["ab"];
+            Validation v = a.validate(ledgerAB);
+            BEAST_EXPECT(ValStatus::current == harness.add(v));
+
+            hash_set<PeerID> listed({a.nodeID()});
+            std::vector<Validation> trustedVals({v});
+            checker(harness.vals(), listed, trustedVals);
+
+            trustedVals.clear();
+            harness.vals().trustChanged({}, {a.nodeID()});
+            checker(harness.vals(), listed, trustedVals);
+        }
+
+        {
+            // Untrusted to trusted
+            LedgerHistoryHelper h;
+            TestHarness harness(h.oracle);
+            Node a = harness.makeNode();
+            a.untrust();
+            Ledger ledgerAB = h["ab"];
+            Validation v = a.validate(ledgerAB);
+            BEAST_EXPECT(ValStatus::current == harness.add(v));
+
+            hash_set<PeerID> listed({a.nodeID()});
+            std::vector<Validation> trustedVals;
+            checker(harness.vals(), listed, trustedVals);
+
+            trustedVals.push_back(v);
+            harness.vals().trustChanged({a.nodeID()}, {});
+            checker(harness.vals(), listed, trustedVals);
+        }
+
+        {
+            // Trusted but not acquired -> untrusted
+            LedgerHistoryHelper h;
+            TestHarness harness(h.oracle);
+            Node a = harness.makeNode();
+            Validation v =
+                a.validate(Ledger::ID{2}, Ledger::Seq{2}, 0s, 0s, true);
+            BEAST_EXPECT(ValStatus::current == harness.add(v));
+
+            hash_set<PeerID> listed({a.nodeID()});
+            std::vector<Validation> trustedVals({v});
+            auto& vals = harness.vals();
+            BEAST_EXPECT(vals.currentTrusted() == trustedVals);
+            BEAST_EXPECT(
+                vals.getPreferred(genesisLedger).second == v.ledgerID());
+            BEAST_EXPECT(
+                vals.getNodesAfter(genesisLedger, genesisLedger.id()) == 0);
+
+            trustedVals.clear();
+            harness.vals().trustChanged({}, {a.nodeID()});
+            // make acquiring ledger available
+            Ledger ledgerAB = h["ab"];
+            BEAST_EXPECT(vals.currentTrusted() == trustedVals);
+            BEAST_EXPECT(
+                vals.getPreferred(genesisLedger).second == genesisLedger.id());
+            BEAST_EXPECT(
+                vals.getNodesAfter(genesisLedger, genesisLedger.id()) == 0);
+        }
+    }
+
+    void
     run() override
     {
         testAddValidation();
@@ -1071,6 +1161,7 @@ class Validations_test : public beast::unit_test::suite
         testAcquireValidatedLedger();
         testNumTrustedForLedger();
         testSeqEnforcer();
+        testTrustChanged();
     }
 };
 
