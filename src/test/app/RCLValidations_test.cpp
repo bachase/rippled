@@ -31,14 +31,35 @@ namespace test {
 class RCLValidations_test : public beast::unit_test::suite
 {
 
-public:
     void
-    run() override
+    testChangeTrusted()
+    {
+        PublicKey key = derivePublicKey(KeyType::ed25519, randomSecretKey());
+        auto v = std::make_shared<STValidation>(
+            uint256(), NetClock::time_point(), key, calcNodeID(key), true);
+
+        BEAST_EXPECT(!v->isTrusted());
+        v->setTrusted();
+        BEAST_EXPECT(v->isTrusted());
+        v->setUntrusted();
+        BEAST_EXPECT(!v->isTrusted());
+
+        RCLValidation rcv{v};
+        BEAST_EXPECT(!rcv.trusted());
+        rcv.setTrusted();
+        BEAST_EXPECT(rcv.trusted());
+        rcv.setUntrusted();
+        BEAST_EXPECT(!rcv.trusted());
+    }
+
+    void
+    testRCLValidatedLedger()
     {
         beast::Journal j;
 
         using Seq = RCLValidatedLedger::Seq;
         using ID = RCLValidatedLedger::ID;
+
 
         // This tests RCLValidatedLedger properly implements the type
         // requirements of a LedgerTrie ledger, with its added behavior that
@@ -193,6 +214,14 @@ public:
                 }
             }
         }
+    }
+
+public:
+    void
+    run() override
+    {
+        testChangeTrusted();
+        testRCLValidatedLedger();
     }
 };
 
