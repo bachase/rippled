@@ -129,6 +129,7 @@ private:
     asNodeIDs(std::initializer_list<PublicKey> const& pks)
     {
         hash_set<NodeID> res;
+        res.reserve(pks.size());
         for (auto const& pk : pks)
             res.insert(calcNodeID(pk));
         return res;

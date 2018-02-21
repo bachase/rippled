@@ -697,22 +697,25 @@ ValidatorList::updateTrusted(hash_set<NodeID> const& seenValidators)
         quorum = std::numeric_limits<std::size_t>::max();
 
     TrustChanges trustChanges;
-    hash_set<PublicKey> newTrustedKeys;
-    for (auto const& val : boost::adaptors::reverse(rankedKeys))
     {
-        if (size <= newTrustedKeys.size())
-            break;
-        newTrustedKeys.insert(val.second);
+        hash_set<PublicKey> newTrustedKeys;
+        for (auto const& val : boost::adaptors::reverse(rankedKeys))
+        {
+            if (size <= newTrustedKeys.size())
+                break;
+            newTrustedKeys.insert(val.second);
 
-        if (trustedKeys_.erase(val.second) == 0)
-            trustChanges.added.insert(calcNodeID(val.second));
+            if (trustedKeys_.erase(val.second) == 0)
+                trustChanges.added.insert(calcNodeID(val.second));
+        }
+
+        for (auto const& k : trustedKeys_)
+            trustChanges.removed.insert(calcNodeID(k));
+        trustedKeys_ = std::move(newTrustedKeys);
     }
 
-    for(auto const& k : trustedKeys_)
-        trustChanges.removed.insert(calcNodeID(k));
-
     quorum_ = quorum;
-    std::swap(newTrustedKeys, trustedKeys_);
+
 
     JLOG(j_.debug()) << "Using quorum of " << quorum_ << " for new set of "
                      << trustedKeys_.size() << " trusted validators ("

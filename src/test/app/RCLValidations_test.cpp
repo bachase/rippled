@@ -34,6 +34,7 @@ class RCLValidations_test : public beast::unit_test::suite
     void
     testChangeTrusted()
     {
+        testcase("Change validation trusted status");
         PublicKey key = derivePublicKey(KeyType::ed25519, randomSecretKey());
         auto v = std::make_shared<STValidation>(
             uint256(), NetClock::time_point(), key, calcNodeID(key), true);
@@ -55,6 +56,7 @@ class RCLValidations_test : public beast::unit_test::suite
     void
     testRCLValidatedLedger()
     {
+        testcase("RCLValidatedLedger ancestry");
         beast::Journal j;
 
         using Seq = RCLValidatedLedger::Seq;

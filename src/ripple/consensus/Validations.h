@@ -151,8 +151,6 @@ isCurrent(
 enum class ValStatus {
     /// This was a new validation and was added
     current,
-    /// Already had this validation for this ID but different seq
-    repeatID,
     /// Not current or was older than current from this node
     stale,
     /// A validation violates the increasing seq requirement
@@ -166,8 +164,6 @@ to_string(ValStatus m)
     {
         case ValStatus::current:
             return "current";
-        case ValStatus::repeatID:
-            return "repeatID";
         case ValStatus::stale:
             return "stale";
         case ValStatus::badSeq:
@@ -594,9 +590,9 @@ public:
 
             // This validation is a repeat if we already have
             // one with the same id and signing key for this node
-            auto const ret = byLedger_[val.ledgerID()].emplace(nodeID, val);
-            if (!ret.second && ret.first->second.key() == val.key())
-                return ValStatus::repeatID;
+            auto ret = byLedger_[val.ledgerID()].emplace(nodeID, val);
+            if (!ret.second)
+                ret.first->second = val;
 
             auto const ins = current_.emplace(nodeID, val);
             if (!ins.second)

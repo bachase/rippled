@@ -327,13 +327,6 @@ handleNewValidation(Application& app,
             dmp(j.warn(),
                 "already validated sequence at or past " + to_string(seq));
         }
-        else if(outcome == ValStatus::repeatID && j.warn())
-        {
-            auto const seq = val->getFieldU32(sfLedgerSequence);
-            dmp(j.warn(),
-                "already validated ledger with same id but different seq "
-                "than" + to_string(seq));
-        }
 
         if (val->isTrusted() && outcome == ValStatus::current)
         {

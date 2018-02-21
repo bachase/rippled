@@ -53,17 +53,33 @@ public:
         peer.
 
         @param sit Iterator over serialized data
-        @param lookupNodeID Find the Node ID based on the public key used to
-                            sign the validation. For manifest based validators,
-                            this should be the NodeID of the master public key.
+        @param lookupNodeID Invocable with signature
+                               NodeID(PublicKey const&)
+                            used to find the Node ID based on the public key
+                            that signed the validation. For manifest based
+                            validators, this should be the NodeID of the master
+                            public key.
         @param checkSignature Whether to verify the data was signed properly
 
         @note Throws if the object is not valid
     */
+    template <class LookupNodeID>
     STValidation(
         SerialIter& sit,
-        std::function<NodeID(PublicKey const&)> const& lookupNodeID,
-        bool checkSignature = true);
+        LookupNodeID&& lookupNodeID,
+        bool checkSignature)
+        : STObject(getFormat(), sit, sfValidation)
+    {
+        mNodeID =
+            lookupNodeID(PublicKey(makeSlice(getFieldVL(sfSigningPubKey))));
+        assert(mNodeID.isNonZero());
+
+        if (checkSignature && !isValid())
+        {
+            JLOG(debugLog().error()) << "Invalid validation" << getJson(0);
+            Throw<std::runtime_error>("Invalid validation");
+        }
+    }
 
     /** Construct a new STValidation
 

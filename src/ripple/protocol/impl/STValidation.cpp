@@ -27,23 +27,6 @@
 namespace ripple {
 
 STValidation::STValidation(
-    SerialIter& sit,
-    std::function<NodeID(PublicKey const &)> const& lookupNodeID,
-    bool checkSignature)
-    : STObject(getFormat(), sit, sfValidation)
-{
-    mNodeID = lookupNodeID(PublicKey(makeSlice(getFieldVL(sfSigningPubKey))));
-    assert (mNodeID.isNonZero ());
-
-    if  (checkSignature && !isValid ())
-    {
-        JLOG (debugLog().error())
-            << "Invalid validation" << getJson (0);
-        Throw<std::runtime_error> ("Invalid validation");
-    }
-}
-
-STValidation::STValidation(
     uint256 const& ledgerHash,
     NetClock::time_point signTime,
     PublicKey const& publicKey,
