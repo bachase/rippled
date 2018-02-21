@@ -49,7 +49,7 @@ public:
 
     /** Construct a STValidation from a peer.
 
-        Construct an STValidation from serialized data previously shared by a
+        Construct a STValidation from serialized data previously shared by a
         peer.
 
         @param sit Iterator over serialized data
@@ -72,8 +72,8 @@ public:
 
         @param ledgerHash The hash of the validated ledger
         @param signTime When the validation is signed
-        @param raPub The current signing public key
-        @param nodeID ID corresponding to nodes public master key
+        @param publicKey The current signing public key
+        @param nodeID ID corresponding to node's public master key
         @param isFull Whether the validation is full or partial
 
     */
@@ -81,7 +81,7 @@ public:
     STValidation(
         uint256 const& ledgerHash,
         NetClock::time_point signTime,
-        PublicKey const& raPub,
+        PublicKey const& publicKey,
         NodeID const& nodeID,
         bool isFull);
 

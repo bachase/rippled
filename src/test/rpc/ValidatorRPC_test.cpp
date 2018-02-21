@@ -312,7 +312,7 @@ public:
             for (auto const& val : validators)
                 startKeys.insert(calcNodeID(val.masterPublic));
 
-            env.app().validators().onConsensusStart(startKeys);
+            env.app().validators().updateTrusted(startKeys);
 
             {
                 auto const jrr = env.rpc("server_info")[jss::result];

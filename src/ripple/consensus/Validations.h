@@ -257,7 +257,7 @@ to_string(ValStatus m)
         void onStale(Validation && );
 
         // Flush the remaining validations (typically done on shutdown)
-        void flush(hash_map<NodeKey,Validation> && remaining);
+        void flush(hash_map<NodeID,Validation> && remaining);
 
         // Return the current network time (used to determine staleness)
         NetClock::time_point now() const;

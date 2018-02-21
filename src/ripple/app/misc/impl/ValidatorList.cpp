@@ -598,7 +598,7 @@ ValidatorList::calculateMinimumQuorum (
 }
 
 TrustChanges
-ValidatorList::onConsensusStart(hash_set<NodeID> const& seenValidators)
+ValidatorList::updateTrusted(hash_set<NodeID> const& seenValidators)
 {
     boost::unique_lock<boost::shared_mutex> lock{mutex_};
 
@@ -704,13 +704,12 @@ ValidatorList::onConsensusStart(hash_set<NodeID> const& seenValidators)
             break;
         newTrustedKeys.insert(val.second);
 
-        if (trustedKeys_.count(val.second) == 0)
+        if (trustedKeys_.erase(val.second) == 0)
             trustChanges.added.insert(calcNodeID(val.second));
     }
 
     for(auto const& k : trustedKeys_)
-        if(newTrustedKeys.count(k) == 0)
-            trustChanges.removed.insert(calcNodeID(k));
+        trustChanges.removed.insert(calcNodeID(k));
 
     quorum_ = quorum;
     std::swap(newTrustedKeys, trustedKeys_);

@@ -210,23 +210,23 @@ public:
         std::string const& signature,
         std::uint32_t version);
 
-    /** Update trusted keys
+    /** Update trusted nodes
 
-        Reset the trusted keys based on latest manifests, received validations,
+        Reset the trusted nodes based on latest manifests, received validations,
         and lists.
 
         @param seenValidators Set of NodeIDs of validators that have signed
         recently received validations
 
         @return TrustedKeyChanges instance with newly trusted or untrusted
-        master public keys.
+        node identities.
 
         @par Thread Safety
 
         May be called concurrently
     */
     TrustChanges
-    onConsensusStart (hash_set<NodeID> const& seenValidators);
+    updateTrusted (hash_set<NodeID> const& seenValidators);
 
     /** Get quorum value for current trusted key set
 
