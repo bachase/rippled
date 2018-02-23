@@ -519,9 +519,9 @@ private:
     }
 
     void
-    testUpdate ()
+    testUpdateTrusted ()
     {
-        testcase ("Update");
+        testcase ("Update trusted");
 
         PublicKey emptyLocalKey;
         ManifestCache manifests;
@@ -1142,7 +1142,7 @@ public:
         testGenesisQuorum ();
         testConfigLoad ();
         testApplyList ();
-        testUpdate ();
+        testUpdateTrusted ();
         testExpires ();
     }
 };

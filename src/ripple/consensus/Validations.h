@@ -588,8 +588,7 @@ public:
             if (!enforcer(now, val.seq(), parms_))
                 return ValStatus::badSeq;
 
-            // This validation is a repeat if we already have
-            // one with the same id and signing key for this node
+            // Use insert_or_assign when C++17 supported
             auto ret = byLedger_[val.ledgerID()].emplace(nodeID, val);
             if (!ret.second)
                 ret.first->second = val;

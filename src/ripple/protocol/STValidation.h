@@ -20,6 +20,7 @@
 #ifndef RIPPLE_PROTOCOL_STVALIDATION_H_INCLUDED
 #define RIPPLE_PROTOCOL_STVALIDATION_H_INCLUDED
 
+#include <ripple/basics/Log.h>
 #include <ripple/protocol/PublicKey.h>
 #include <ripple/protocol/STObject.h>
 #include <ripple/protocol/SecretKey.h>
