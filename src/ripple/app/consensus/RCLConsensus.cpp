@@ -787,8 +787,6 @@ RCLConsensus::Adaptor::buildLCL(
                     return !buildLCL->txExists(txID);
                 });
         }
-        // Update fee computations.
-        app_.getTxQ().processClosedLedger(app_, accum, roundTime > 5s);
         accum.apply(*buildLCL);
     }
 
@@ -814,6 +812,9 @@ RCLConsensus::Adaptor::buildLCL(
     // Accept ledger
     buildLCL->setAccepted(
         closeTime, closeResolution, closeTimeCorrect, app_.config());
+
+    // Update fee computations.
+    app_.getTxQ().processClosedLedger(app_, *buildLCL, roundTime > 5s);
 
     // And stash the ledger in the ledger master
     if (ledgerMaster_.storeLedger(buildLCL))
