@@ -62,6 +62,24 @@ public:
         return ledger[s];
     }
 
+    /** Return the ledger behind this span-tip.
+
+        @note The backingLedger sequence number will be >= to the seq of the
+              SpanTip itself
+
+              Seq
+                 1 2 3 4 5
+                -L-L-L-L-L
+                     ^   ^
+                     ^   backingLedger.seq()
+                     spanTip.seq
+    */
+    Ledger const&
+    backingLedger() const
+    {
+        return ledger;
+    }
+
 private:
     Ledger const ledger;
 };

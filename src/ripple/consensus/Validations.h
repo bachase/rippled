@@ -537,6 +537,10 @@ private:
         }
     }
 
+    void
+    markInvalid(ScopedLock const& lock, Ledger const& ledger)
+    {
+    }
     /** Enforce integrity of preferred ledger
 
         Check that intermediate ledgers between curr and preferred are valid,
@@ -560,47 +564,63 @@ private:
         Ledger const& fullyValid,
         SpanTip<Ledger> const& preferred)
     {
-        Seq first = curr.seq();
+        Ledger const& preferredBacked = preferred.backingLedger();
 
-        // MISMATCH?? FULLY VALID??
+        Seq const fullyValidMismatch = mismatch(fullyValid, preferredBacked);
+        if(fullyValidMismatch <= fullyValid.seq())
+        {
+            markInvalid(lock, preferredBacked);
 #if 0
-        if(preferred.ancestor(curr.seq()) != curr.id())
-            first = fullyValidSeq + Seq{1};
+            JLOG(adaptor_.journal().err())
+                        << "Invalid preferred ledger " << child->seq()
+                        << ", " << child->id() << " does not descend from fully validated ledger "
+                        << fullyValid->seq() << ", " << fullyValid->id();
 #endif
+             return std::make_pair(curr.seq(), curr.id());
+        }
+
+        // Start the check from the first mismatch between preferred and curr
+        // ledger. In the rare case that a new fully validated ledger with
+        // sequence number larger than curr exists, use that to determine the
+        // mismatch spot to avoid rechecking ledgers that have been fully
+        // validated. This could occur if we just saw a quorum of validations to
+        // declare a new fully validated ledger, but those validations arrived
+        // since the last time we checked the preferred ledger (so didn't have
+        // a chance to update curr to that ledger already).
+        Seq first = (fullyValid.seq() < curr.seq())
+            ? mismatch(curr, preferredBacked)
+            : fullyValidMismatch;
+
         // No need to check genesis ledger
         if (first == Seq{0})
             first = Seq{1};
 
         Seq const last = preferred.seq;
-        boost::optional<Ledger> parent =
-            adaptor_.acquire(preferred.ancestor(first - Seq{1}));
-        while (parent && first != last)
+        boost::optional<Ledger> parent;
+        while (first < last)
         {
+            if (!parent)
+                parent = adaptor_.acquire(preferred.ancestor(first - Seq{1}));
             boost::optional<Ledger> child =
                 adaptor_.acquire(preferred.ancestor(first));
-            if (child)
+            if (parent && child)
             {
                 if (!adaptor_.replayLedger(*parent, *child))
                 {
+                    markInvalid(lock, *child);
 #if 0
-                    // Untrust?
-                    // Remove from trie? (What if they keep advancing?)
-                    // Forbid that branch of history?
-                    markInvalid(child);
                     JLOG(adaptor_.journal().err())
                         << "Invalid ledger on preferred chain " << child->seq()
                         << ", " << child->id() << " does not replay from"
                         << parent->seq() << ", " << parent->id();
-                    assert(false);
 #endif
                     return std::make_pair(parent->seq(), parent->id());
                 }
             }
             else
                 return std::make_pair(parent->seq(), parent->id());
-
             first++;
-            std::swap(parent, child);
+            parent = std::move(child);
         }
 
         return std::make_pair(preferred.seq, preferred.id);

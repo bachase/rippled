@@ -47,9 +47,9 @@ RCLValidatedLedger::RCLValidatedLedger(MakeGenesis)
 RCLValidatedLedger::RCLValidatedLedger(
     std::shared_ptr<Ledger const> ledger,
     beast::Journal j)
-    : ledgerID_{ledger ? ledger->info().hash : uint256{0}}
-    , ledgerSeq_{ledger ? ledger->seq() : 0}
-    , ledger_{std::move(ledger)}
+    : ledger_{std::move(ledger)}
+    , ledgerID_{ledger_ ? ledger_->info().hash : uint256{0}}
+    , ledgerSeq_{ledger_ ? ledger_->seq() : 0}
     , j_{j}
 {
     if (ledger_)
