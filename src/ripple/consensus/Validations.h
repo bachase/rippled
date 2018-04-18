@@ -543,17 +543,21 @@ private:
         returning the ancestor ledger of `preferred` with largest sequence
         number that was successfully checked. Checking requires that
         intermediate ledgers are available to be replayed. If some ledger is not
-        yet acquired, the parent of that ledger is considered preferred.
+        yet acquired, the parent of that ledger is considered preferred. This
+        also enforces that the preferred ledger has the last fully validated
+        ledger as an ancestor.
 
         @param lock Handle indicating this is performed while under lock
         @param curr Current working ledger
         @param preferred SpanTip representing preferred ledger
+        @param fullyValid The last fully validated ledger
         @return Pair of sequence and id of preferred ledger to switch to
     */
     std::pair<Seq, ID>
     enforceIntegrity(
         ScopedLock const& lock,
         Ledger const& curr,
+        Ledger const& fullyValid,
         SpanTip<Ledger> const& preferred)
     {
         Seq first = curr.seq();
@@ -815,13 +819,14 @@ public:
         remains the current working ledger.
 
         @param curr The local node's current working ledger
+        @param fullyValid The last fully validated ledger
 
         @return The sequence and id of the preferred working ledger,
-                or Seq{0},ID{0} if no trusted validations are available to
+                or boost::none if no trusted validations are available to
                 determine the preferred ledger.
     */
     std::pair<Seq, ID>
-    getPreferred(Ledger const& curr)
+    getPreferred(Ledger const& curr, Ledger const& fullyValid)
     {
         ScopedLock lock{mutex_};
         SpanTip<Ledger> preferred =
@@ -848,9 +853,11 @@ public:
                     return std::tie(aSize, aKey.second) <
                         std::tie(bSize, bKey.second);
                 });
-            if(it != acquiring_.end())
+            // Dominant acquiring ledger must be ahead of last fully validated
+            // ledger
+            if(it != acquiring_.end() && it->first.first >= fullyValid.seq())
                 return it->first;
-            return std::make_pair(preferred.seq, preferred.id);
+            return std::make_pair(Seq{0},ID{0});
         }
 
         // If we are the parent of the preferred ledger, stick with our
@@ -867,7 +874,7 @@ public:
             // if it is a different chain.
             (curr[preferred.seq] != preferred.id))
         {
-            return enforceIntegrity(lock, curr, preferred);
+            return enforceIntegrity(lock, curr, fullyValid, preferred);
         }
 
         // Stick with current ledger
@@ -878,21 +885,22 @@ public:
         ledger sequence number
 
         @param curr Current working ledger
-        @param minValidSeq Minimum allowed sequence number
+        @param fullyValid The last fully validated ledger
 
-        @return ID Of the preferred ledger, or curr if the preferred ledger
-                   is not valid
+        @return ID Of the preferred ledger, which may be curr.id() if the
+                   preferred ledger is not valid
     */
     ID
-    getPreferred(Ledger const& curr, Seq minValidSeq)
+    getPreferredID(Ledger const& curr, Ledger const& fullyValid)
     {
-        std::pair<Seq, ID> preferred = getPreferred(curr);
-        if(preferred.first >= minValidSeq && preferred.second != ID{0})
+        std::pair<Seq, ID> preferred = getPreferred(lcl, fullyValid);
+
+        // Trusted validations exist
+        if (preferred.second != ID{0} && preferred.first != Seq{0})
             return preferred.second;
+
         return curr.id();
-
     }
-
 
     /** Determine the preferred last closed ledger for the next consensus round.
 
@@ -901,25 +909,25 @@ public:
         trusted validations are available.
 
         @param lcl Last closed ledger by this node
-        @param minSeq Minimum allowed sequence number of the trusted preferred ledger
+        @param fullyValid The last fully validated ledger
         @param peerCounts Map from ledger ids to count of peers with that as the
                           last closed ledger
         @return The preferred last closed ledger ID
 
-        @note The minSeq does not apply to the peerCounts, since this function
+        @note The fullyValid does not apply to the peerCounts, since this function
               does not know their sequence number
     */
     ID
     getPreferredLCL(
-        Ledger const & lcl,
-        Seq minSeq,
+        Ledger const& lcl,
+        Ledger const& fullyValid,
         hash_map<ID, std::uint32_t> const& peerCounts)
     {
-        std::pair<Seq, ID> preferred = getPreferred(lcl);
+        std::pair<Seq, ID> preferred = getPreferred(lcl, fullyValid);
 
         // Trusted validations exist
-        if (preferred.second != ID{0} && preferred.first > Seq{0})
-            return (preferred.first >= minSeq) ? preferred.second : lcl.id();
+        if (preferred.second != ID{0} && preferred.first != Seq{0})
+            return preferred.second;
 
         // Otherwise, rely on peer ledgers
         auto it = std::max_element(

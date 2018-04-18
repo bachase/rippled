@@ -251,7 +251,8 @@ RCLConsensus::Adaptor::getPrevLedger(
     RCLValidations& vals = app_.getValidations();
     uint256 netLgr = vals.getPreferred(
         RCLValidatedLedger{ledger.ledger_, vals.adaptor().journal()},
-        ledgerMaster_.getValidLedgerIndex());
+        RCLValidatedLedger{ledgerMaster_.getValidatedLedger(),
+                           vals.adaptor().journal()});
 
     if (netLgr != ledgerID)
     {
