@@ -18,9 +18,11 @@
 //==============================================================================
 
 #include <ripple/app/consensus/RCLValidations.h>
+#include <ripple/app/ledger/BuildLedger.h>
 #include <ripple/app/ledger/InboundLedger.h>
 #include <ripple/app/ledger/InboundLedgers.h>
 #include <ripple/app/ledger/LedgerMaster.h>
+#include <ripple/app/ledger/LedgerReplay.h>
 #include <ripple/app/main/Application.h>
 #include <ripple/app/misc/NetworkOPs.h>
 #include <ripple/app/misc/ValidatorList.h>
@@ -45,7 +47,10 @@ RCLValidatedLedger::RCLValidatedLedger(MakeGenesis)
 RCLValidatedLedger::RCLValidatedLedger(
     std::shared_ptr<Ledger const> const& ledger,
     beast::Journal j)
-    : ledgerID_{ledger->info().hash}, ledgerSeq_{ledger->seq()}, j_{j}
+    : ledgerID_{ledger->info().hash}
+    , ledgerSeq_{ledger->seq()}
+    , ledger_{ledger}
+    , j_{j}
 {
     auto const hashIndex = ledger->read(keylet::skip());
     if (hashIndex)
@@ -146,6 +151,16 @@ RCLValidationsAdaptor::acquire(LedgerHash const & hash)
     assert(ledger->info().hash == hash);
 
     return RCLValidatedLedger(std::move(ledger), j_);
+}
+
+bool
+RCLValidationsAdaptor::replayLedger(
+    RCLValidatedLedger const& parent,
+    RCLValidatedLedger const& child)
+{
+    auto const replayed =
+        buildLedger(LedgerReplay(parent.ledger_, child.ledger_), {}, app_, j_);
+    return replayed->info().hash == child.ledger_->info().hash;
 }
 
 void

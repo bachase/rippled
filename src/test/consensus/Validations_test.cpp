@@ -234,6 +234,13 @@ class Validations_test : public beast::unit_test::suite
         {
             return oracle_.lookup(id);
         }
+
+        bool
+        replayLedger(Ledger const& parent, Ledger const& child)
+        {
+            return true;
+        }
+
     };
 
     // Specialize generic Validations using the above types

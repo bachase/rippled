@@ -537,6 +537,71 @@ private:
         }
     }
 
+    /** Enforce integrity of preferred ledger
+
+        Check that intermediate ledgers between curr and preferred are valid,
+        returning the ancestor ledger of `preferred` with largest sequence
+        number that was successfully checked. Checking requires that
+        intermediate ledgers are available to be replayed. If some ledger is not
+        yet acquired, the parent of that ledger is considered preferred.
+
+        @param lock Handle indicating this is performed while under lock
+        @param curr Current working ledger
+        @param preferred SpanTip representing preferred ledger
+        @return Pair of sequence and id of preferred ledger to switch to
+    */
+    std::pair<Seq, ID>
+    enforceIntegrity(
+        ScopedLock const& lock,
+        Ledger const& curr,
+        SpanTip<Ledger> const& preferred)
+    {
+        Seq first = curr.seq();
+
+        // MISMATCH?? FULLY VALID??
+#if 0
+        if(preferred.ancestor(curr.seq()) != curr.id())
+            first = fullyValidSeq + Seq{1};
+#endif
+        // No need to check genesis ledger
+        if (first == Seq{0})
+            first = Seq{1};
+
+        Seq const last = preferred.seq;
+        boost::optional<Ledger> parent =
+            adaptor_.acquire(preferred.ancestor(first - Seq{1}));
+        while (parent && first != last)
+        {
+            boost::optional<Ledger> child =
+                adaptor_.acquire(preferred.ancestor(first));
+            if (child)
+            {
+                if (!adaptor_.replayLedger(*parent, *child))
+                {
+#if 0
+                    // Untrust?
+                    // Remove from trie? (What if they keep advancing?)
+                    // Forbid that branch of history?
+                    markInvalid(child);
+                    JLOG(adaptor_.journal().err())
+                        << "Invalid ledger on preferred chain " << child->seq()
+                        << ", " << child->id() << " does not replay from"
+                        << parent->seq() << ", " << parent->id();
+                    assert(false);
+#endif
+                    return std::make_pair(parent->seq(), parent->id());
+                }
+            }
+            else
+                return std::make_pair(parent->seq(), parent->id());
+
+            first++;
+            std::swap(parent, child);
+        }
+
+        return std::make_pair(preferred.seq, preferred.id);
+    }
+
 public:
     /** Constructor
 
@@ -794,15 +859,16 @@ public:
             preferred.ancestor(curr.seq()) == curr.id())
             return std::make_pair(curr.seq(), curr.id());
 
-        // A ledger ahead of us is preferred regardless of whether it is
-        // a descendant of our working ledger or it is on a different chain
-        if (preferred.seq > curr.seq())
-            return std::make_pair(preferred.seq, preferred.id);
-
-        // Only switch to earlier or same sequence number
-        // if it is a different chain.
-        if (curr[preferred.seq] != preferred.id)
-            return std::make_pair(preferred.seq, preferred.id);
+        if (
+            // A ledger ahead of us is preferred regardless of whether it is
+            // a descendant of our working ledger or it is on a different chain
+            (preferred.seq > curr.seq()) ||
+            // Only switch to earlier or same sequence number
+            // if it is a different chain.
+            (curr[preferred.seq] != preferred.id))
+        {
+            return enforceIntegrity(lock, curr, preferred);
+        }
 
         // Stick with current ledger
         return std::make_pair(curr.seq(), curr.id());

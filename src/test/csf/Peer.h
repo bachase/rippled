@@ -161,6 +161,12 @@ struct Peer
                 return *ledger;
             return boost::none;
         }
+
+        bool
+        replayLedger(Ledger const& parent, Ledger const& child)
+        {
+            return true;
+        }
     };
 
     //! Type definitions for generic consensus

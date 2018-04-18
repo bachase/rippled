@@ -191,10 +191,12 @@ public:
     Seq
     minSeq() const;
 
+    std::shared_ptr<Ledger const> ledger_;
 private:
     ID ledgerID_;
     Seq ledgerSeq_;
     std::vector<uint256> ancestors_;
+
     beast::Journal j_;
 };
 
@@ -239,6 +241,12 @@ public:
     /** Attempt to acquire the ledger with given id from the network */
     boost::optional<RCLValidatedLedger>
     acquire(LedgerHash const & id);
+
+    /** Return whether the child ledger replays */
+    bool
+    replayLedger(
+        RCLValidatedLedger const& parent,
+        RCLValidatedLedger const& child);
 
     beast::Journal
     journal() const
