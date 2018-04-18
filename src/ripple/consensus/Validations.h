@@ -606,6 +606,73 @@ private:
         return std::make_pair(preferred.seq, preferred.id);
     }
 
+    /** Return the sequence number and ID of the preferred working ledger
+
+        A ledger is preferred if it has more support amongst trusted validators
+        and is *not* an ancestor of the current working ledger; otherwise it
+        remains the current working ledger.
+
+        @param curr The local node's current working ledger
+        @param fullyValid The last fully validated ledger
+
+        @return The sequence and id of the preferred working ledger,
+                or boost::none if no trusted validations are available to
+                determine the preferred ledger.
+    */
+    std::pair<Seq, ID>
+    getPreferredImpl(Ledger const& curr, Ledger const& fullyValid)
+    {
+        ScopedLock lock{mutex_};
+        SpanTip<Ledger> preferred =
+            withTrie(lock, [this](LedgerTrie<Ledger>& trie) {
+                return trie.getPreferred(localSeqEnforcer_.largest());
+            });
+
+        // No trusted validations to determine branch
+        if (preferred.seq == Seq{0})
+        {
+            // fall back to majority over acquiring ledgers
+            auto it = std::max_element(
+                acquiring_.begin(),
+                acquiring_.end(),
+                [](auto const& a, auto const& b) {
+                    std::pair<Seq, ID> const& aKey = a.first;
+                    typename hash_set<NodeID>::size_type const& aSize =
+                        a.second.size();
+                    std::pair<Seq, ID> const& bKey = b.first;
+                    typename hash_set<NodeID>::size_type const& bSize =
+                        b.second.size();
+                    // order by number of trusted peers validating that ledger
+                    // break ties with ledger ID
+                    return std::tie(aSize, aKey.second) <
+                        std::tie(bSize, bKey.second);
+                });
+            if(it != acquiring_.end())
+                return it->first;
+            return std::make_pair(Seq{0},ID{0});
+        }
+
+        // If we are the parent of the preferred ledger, stick with our
+        // current ledger since we might be about to generate it
+        if (preferred.seq == curr.seq() + Seq{1} &&
+            preferred.ancestor(curr.seq()) == curr.id())
+            return std::make_pair(curr.seq(), curr.id());
+
+        if (
+            // A ledger ahead of us is preferred regardless of whether it is
+            // a descendant of our working ledger or it is on a different chain
+            (preferred.seq > curr.seq()) ||
+            // Only switch to earlier or same sequence number
+            // if it is a different chain.
+            (curr[preferred.seq] != preferred.id))
+        {
+            return enforceIntegrity(lock, curr, fullyValid, preferred);
+        }
+
+        // Stick with current ledger
+        return std::make_pair(curr.seq(), curr.id());
+    }
+
 public:
     /** Constructor
 
@@ -812,75 +879,6 @@ public:
         return trie_.getJson();
     }
 
-    /** Return the sequence number and ID of the preferred working ledger
-
-        A ledger is preferred if it has more support amongst trusted validators
-        and is *not* an ancestor of the current working ledger; otherwise it
-        remains the current working ledger.
-
-        @param curr The local node's current working ledger
-        @param fullyValid The last fully validated ledger
-
-        @return The sequence and id of the preferred working ledger,
-                or boost::none if no trusted validations are available to
-                determine the preferred ledger.
-    */
-    std::pair<Seq, ID>
-    getPreferred(Ledger const& curr, Ledger const& fullyValid)
-    {
-        ScopedLock lock{mutex_};
-        SpanTip<Ledger> preferred =
-            withTrie(lock, [this](LedgerTrie<Ledger>& trie) {
-                return trie.getPreferred(localSeqEnforcer_.largest());
-            });
-
-        // No trusted validations to determine branch
-        if (preferred.seq == Seq{0})
-        {
-            // fall back to majority over acquiring ledgers
-            auto it = std::max_element(
-                acquiring_.begin(),
-                acquiring_.end(),
-                [](auto const& a, auto const& b) {
-                    std::pair<Seq, ID> const& aKey = a.first;
-                    typename hash_set<NodeID>::size_type const& aSize =
-                        a.second.size();
-                    std::pair<Seq, ID> const& bKey = b.first;
-                    typename hash_set<NodeID>::size_type const& bSize =
-                        b.second.size();
-                    // order by number of trusted peers validating that ledger
-                    // break ties with ledger ID
-                    return std::tie(aSize, aKey.second) <
-                        std::tie(bSize, bKey.second);
-                });
-            // Dominant acquiring ledger must be ahead of last fully validated
-            // ledger
-            if(it != acquiring_.end() && it->first.first >= fullyValid.seq())
-                return it->first;
-            return std::make_pair(Seq{0},ID{0});
-        }
-
-        // If we are the parent of the preferred ledger, stick with our
-        // current ledger since we might be about to generate it
-        if (preferred.seq == curr.seq() + Seq{1} &&
-            preferred.ancestor(curr.seq()) == curr.id())
-            return std::make_pair(curr.seq(), curr.id());
-
-        if (
-            // A ledger ahead of us is preferred regardless of whether it is
-            // a descendant of our working ledger or it is on a different chain
-            (preferred.seq > curr.seq()) ||
-            // Only switch to earlier or same sequence number
-            // if it is a different chain.
-            (curr[preferred.seq] != preferred.id))
-        {
-            return enforceIntegrity(lock, curr, fullyValid, preferred);
-        }
-
-        // Stick with current ledger
-        return std::make_pair(curr.seq(), curr.id());
-    }
-
     /** Get the ID of the preferred working ledger that exceeds a minimum valid
         ledger sequence number
 
@@ -891,9 +889,9 @@ public:
                    preferred ledger is not valid
     */
     ID
-    getPreferredID(Ledger const& curr, Ledger const& fullyValid)
+    getPreferred(Ledger const& curr, Ledger const& fullyValid)
     {
-        std::pair<Seq, ID> preferred = getPreferred(lcl, fullyValid);
+        std::pair<Seq, ID> preferred = getPreferredImpl(curr, fullyValid);
 
         // Trusted validations exist
         if (preferred.second != ID{0} && preferred.first != Seq{0})
@@ -914,8 +912,8 @@ public:
                           last closed ledger
         @return The preferred last closed ledger ID
 
-        @note The fullyValid does not apply to the peerCounts, since this function
-              does not know their sequence number
+        @note The fullyValid does not apply to the peerCounts, since this is
+              done while bootstrapping from no validations
     */
     ID
     getPreferredLCL(
@@ -923,7 +921,7 @@ public:
         Ledger const& fullyValid,
         hash_map<ID, std::uint32_t> const& peerCounts)
     {
-        std::pair<Seq, ID> preferred = getPreferred(lcl, fullyValid);
+        std::pair<Seq, ID> preferred = getPreferredImpl(lcl, fullyValid);
 
         // Trusted validations exist
         if (preferred.second != ID{0} && preferred.first != Seq{0})

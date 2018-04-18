@@ -1303,7 +1303,7 @@ bool NetworkOPsImp::checkLastClosedLedger (
     uint256 preferredLCL = validations.getPreferredLCL(
         RCLValidatedLedger{ourClosed, validations.adaptor().journal()},
         RCLValidatedLedger{m_ledgerMaster.getValidatedLedger(),
-                           validations.adaptor.journal()},
+                           validations.adaptor().journal()},
         peerCounts);
 
     bool switchLedgers = preferredLCL != closedLedger;

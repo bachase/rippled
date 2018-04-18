@@ -45,22 +45,25 @@ RCLValidatedLedger::RCLValidatedLedger(MakeGenesis)
 }
 
 RCLValidatedLedger::RCLValidatedLedger(
-    std::shared_ptr<Ledger const> const& ledger,
+    std::shared_ptr<Ledger const> ledger,
     beast::Journal j)
-    : ledgerID_{ledger->info().hash}
-    , ledgerSeq_{ledger->seq()}
-    , ledger_{ledger}
+    : ledgerID_{ledger ? ledger->info().hash : uint256{0}}
+    , ledgerSeq_{ledger ? ledger->seq() : 0}
+    , ledger_{std::move(ledger)}
     , j_{j}
 {
-    auto const hashIndex = ledger->read(keylet::skip());
-    if (hashIndex)
+    if (ledger_)
     {
-        assert(hashIndex->getFieldU32(sfLastLedgerSequence) == (seq() - 1));
-        ancestors_ = hashIndex->getFieldV256(sfHashes).value();
+        auto const hashIndex = ledger_->read(keylet::skip());
+        if (hashIndex)
+        {
+            assert(hashIndex->getFieldU32(sfLastLedgerSequence) == (seq() - 1));
+            ancestors_ = hashIndex->getFieldV256(sfHashes).value();
+        }
+        else
+            JLOG(j_.warn()) << "Ledger " << ledgerSeq_ << ":" << ledgerID_
+                            << " missing recent ancestor hashes";
     }
-    else
-        JLOG(j_.warn()) << "Ledger " << ledgerSeq_ << ":" << ledgerID_
-                        << " missing recent ancestor hashes";
 }
 
 auto
