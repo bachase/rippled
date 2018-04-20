@@ -272,6 +272,12 @@ to_string(ValStatus m)
         // Attempt to acquire a specific ledger.
         boost::optional<Ledger> acquire(Ledger::ID const & ledgerID);
 
+        // Return whether child replays properly from parent ledger
+        bool replayLedger(Ledger const& parent, Ledger const& child);
+
+        // Return journal for logging
+        beast::Journal journal();
+
         // ... implementation specific
     };
     @endcode
@@ -362,6 +368,44 @@ private:
         }
     }
 
+    /** Set a branch of ledger history as invalid.
+
+        Removes ledgers from the trie that descend from the provided ledger and
+        marks that branch as invalid for preventing future validated ledgers from
+        reviving the branch.
+
+        @param lock Handle indicating this is called while under lock
+        @param invalid The invalid ledger's sequence and id
+    */
+    void
+    markInvalidTrie(ScopedLock const& lock, std::pair<Seq,ID> const& invalid)
+    {
+        {
+            auto it = lastLedger_.begin();
+            while (it != lastLedger_.end())
+            {
+                if (it->second.seq() >= invalid.first &&
+                    it->second[invalid.first] == invalid.second)
+                {
+                    // WARN!!!
+                    it = trie_.remove(it->second);
+                }
+                else
+                    ++it;
+            }
+        }
+
+        auto it = acquiring_.find(invalid);
+        if (it != acquiring_.end())
+        {
+            // WARN!!!
+            acquiring_.erase(it);
+        }
+#if 0
+        invalidLedgers_.push_back(invalid);
+#endif
+    }
+
     // Check if any pending acquire ledger requests are complete
     void
     checkAcquired(ScopedLock const& lock)
@@ -385,6 +429,12 @@ private:
     void
     updateTrie(ScopedLock const&, NodeID const& nodeID, Ledger ledger)
     {
+#if 0
+        if(!invalidLedgers_.empty())
+        {
+            //
+        }
+#endif
         auto ins = lastLedger_.emplace(nodeID, ledger);
         if (!ins.second)
         {
@@ -537,10 +587,6 @@ private:
         }
     }
 
-    void
-    markInvalid(ScopedLock const& lock, Ledger const& ledger)
-    {
-    }
     /** Enforce integrity of preferred ledger
 
         Check that intermediate ledgers between curr and preferred are valid,
@@ -569,14 +615,14 @@ private:
         Seq const fullyValidMismatch = mismatch(fullyValid, preferredBacked);
         if(fullyValidMismatch <= fullyValid.seq())
         {
-            markInvalid(lock, preferredBacked);
-#if 0
-            JLOG(adaptor_.journal().err())
-                        << "Invalid preferred ledger " << child->seq()
-                        << ", " << child->id() << " does not descend from fully validated ledger "
-                        << fullyValid->seq() << ", " << fullyValid->id();
-#endif
-             return std::make_pair(curr.seq(), curr.id());
+            JLOG(adaptor_.journal().error())
+                << "Invalid preferred ledger " << preferred.seq << ", "
+                << preferred.id
+                << " does not descend from fully validated ledger "
+                << fullyValid.seq() << ", " << fullyValid.id();
+            markInvalidTrie(
+                lock, std::make_pair(preferred.seq, preferred.id));
+            return std::make_pair(curr.seq(), curr.id());
         }
 
         // Start the check from the first mismatch between preferred and curr
@@ -607,13 +653,12 @@ private:
             {
                 if (!adaptor_.replayLedger(*parent, *child))
                 {
-                    markInvalid(lock, *child);
-#if 0
-                    JLOG(adaptor_.journal().err())
+                    JLOG(adaptor_.journal().error())
                         << "Invalid ledger on preferred chain " << child->seq()
                         << ", " << child->id() << " does not replay from"
                         << parent->seq() << ", " << parent->id();
-#endif
+                    markInvalidTrie(
+                        lock, std::make_pair(child->seq(), child->id()));
                     return std::make_pair(parent->seq(), parent->id());
                 }
             }
@@ -636,7 +681,7 @@ private:
         @param fullyValid The last fully validated ledger
 
         @return The sequence and id of the preferred working ledger,
-                or boost::none if no trusted validations are available to
+                or (0,0) if no trusted validations are available to
                 determine the preferred ledger.
     */
     std::pair<Seq, ID>

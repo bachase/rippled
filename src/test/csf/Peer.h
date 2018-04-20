@@ -167,6 +167,12 @@ struct Peer
         {
             return true;
         }
+
+        beast::Journal
+        journal()
+        {
+            return p_.j;
+        }
     };
 
     //! Type definitions for generic consensus

@@ -187,6 +187,7 @@ class Validations_test : public beast::unit_test::suite
         StaleData& staleData_;
         clock_type& c_;
         LedgerOracle& oracle_;
+        beast::Journal j_;
 
     public:
         // Non-locking mutex to avoid locks in generic Validations
@@ -240,6 +241,13 @@ class Validations_test : public beast::unit_test::suite
         {
             return true;
         }
+
+        beast::Journal
+        journal()
+        {
+            return j_;
+        }
+
 
     };
 
