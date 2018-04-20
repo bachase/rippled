@@ -385,13 +385,16 @@ private:
     void
     updateTrie(ScopedLock const&, NodeID const& nodeID, Ledger ledger)
     {
+        // Insert before removing to ensure any invalid information is retained
+        trie_.insert(ledger);
+
         auto ins = lastLedger_.emplace(nodeID, ledger);
         if (!ins.second)
         {
             trie_.remove(ins.first->second);
             ins.first->second = ledger;
         }
-        trie_.insert(ledger);
+
     }
 
     /** Process a new validation

@@ -75,10 +75,13 @@ class Span
     using Seq = typename Ledger::Seq;
     using ID = typename Ledger::ID;
 
-    // The span is the half-open interval [start,end) of ledger_
+    // The span is the half-open interval [start_,end_) of ledger_
     Seq start_{0};
     Seq end_{1};
     Ledger ledger_;
+    // If < end_, invalidFrom is the sequence number at which this span's ledgers
+    // are not valid.
+    Seq invalidFrom_{1};
 
 public:
     Span() : ledger_{typename Ledger::MakeGenesis{}}
@@ -88,7 +91,10 @@ public:
     }
 
     Span(Ledger ledger)
-        : start_{0}, end_{ledger.seq() + Seq{1}}, ledger_{std::move(ledger)}
+        : start_{0}
+        , end_{ledger.seq() + Seq{1}}
+        , ledger_{std::move(ledger)}
+        , invalidFrom_{end_}
     {
     }
 
@@ -109,6 +115,25 @@ public:
     end() const
     {
         return end_;
+    }
+
+    Seq
+    invalidFrom() const
+    {
+        return invalidFrom_;
+    }
+
+    bool
+    startsValid() const
+    {
+        return invalidFrom_ != start_;
+    }
+
+    void
+    markInvalid(Seq const at)
+    {
+        if(at < invalidFrom_)
+            invalidFrom_ = clamp(at);
     }
 
     // Return the Span from [spot,end_) or none if no such valid span
@@ -149,44 +174,65 @@ public:
     }
 
 private:
-    Span(Seq start, Seq end, Ledger const& l)
-        : start_{start}, end_{end}, ledger_{l}
+    Span(Seq start, Seq end, Ledger const& l, Seq invalidFrom)
+        : start_{start}, end_{end}, ledger_{l}, invalidFrom_{invalidFrom}
     {
         // Spans cannot be empty
-        assert(start < end);
+        assert(start_ < end_);
+        assert(invalidFrom >= start_ && invalidFrom <= end_);
     }
+
+    Seq
+    static clamp(Seq val, Seq start, Seq end)
+    {
+        return std::min(std::max(start, val), end);
+    };
 
     Seq
     clamp(Seq val) const
     {
-        return std::min(std::max(start_, val), end_);
+        return clamp(val, start_, end_);
     };
 
     // Return a span of this over the half-open interval [from,to)
     boost::optional<Span>
     sub(Seq from, Seq to) const
     {
-        Seq newFrom = clamp(from);
-        Seq newTo = clamp(to);
+        Seq const newFrom = clamp(from);
+        Seq const newTo = clamp(to);
         if (newFrom < newTo)
-            return Span(newFrom, newTo, ledger_);
+        {
+            return Span(
+                newFrom, newTo, ledger_, clamp(newFrom, newTo, invalidFrom_));
+        }
         return boost::none;
     }
 
     friend std::ostream&
     operator<<(std::ostream& o, Span const& s)
     {
-        return o << s.tip().id << "[" << s.start_ << "," << s.end_ << ")";
+        o << s.tip().id << "[" << s.start_ << "," << s.end_;
+        if(s.invalidFrom_ != s.end_)
+             o << ":invalid@" << s.invalidFrom_;
+        return o << ")";
     }
 
     friend Span
     merge(Span const& a, Span const& b)
     {
-        // Return combined span, using ledger_ from higher sequence span
-        if (a.end_ < b.end_)
-            return Span(std::min(a.start_, b.start_), b.end_, b.ledger_);
+        // Return combined span, using ledger_ from higher sequence span and
+        // lower valid invalidFrom_
+        Seq const newStart = std::min(a.start_, b.start_);
+        Seq const newEnd = std::max(a.end_, b.end_);
+        Ledger const& newLedger = (a.end_ < b.end_) ? b.ledger_ : a.ledger_;
+        Seq const newInvalidFrom = [&]() {
+            if (a.end_ < b.end_)
+                return (a.invalidFrom_ != a.end_) ? a.invalidFrom_
+                                                  : b.invalidFrom_;
+            return (b.invalidFrom_ != b.end_) ? b.invalidFrom_ : a.invalidFrom_;
+        }();
 
-        return Span(std::min(a.start_, b.start_), a.end_, a.ledger_);
+        return Span(newStart, newEnd, newLedger, newInvalidFrom);
     }
 };
 
@@ -563,6 +609,25 @@ public:
         return false;
     }
 
+    /** Mark the given ledger as invalid
+
+        Mark a span of history starting from the given ledger as invalid. If the
+        ledger does not correspond to a span of history currently tracked by the
+        trie, nothing is marked. The invalid marking remains until that branch is
+        completely removed from the trie.
+
+        @param The ledger that is invalid
+    */
+    void
+    markInvalid(Ledger const& ledger)
+    {
+        Node* loc;
+        Seq diffSeq;
+        std::tie(loc, diffSeq) = find(ledger);
+        if(ledger.seq() < diffSeq)
+            loc->span.markInvalid(ledger.seq());
+    }
+
     /** Return count of tip support for the specific ledger.
 
         @param ledger The ledger to lookup
@@ -593,7 +658,7 @@ public:
         Seq diffSeq;
         std::tie(loc, diffSeq) = find(ledger);
 
-        // Check that ledger is is an exact match or proper
+        // Check that ledger is an exact match or proper
         // prefix of loc
         if (loc && diffSeq > ledger.seq() &&
             ledger.seq() < loc->span.end())
@@ -646,7 +711,9 @@ public:
         with relative majority of support, where uncommitted support
         can be given to ANY ledger at that sequence number
         (including one not yet known). If no such preferred ledger exists, then
-        the prior sequence preferred ledger is the overall preferred ledger.
+        the prior sequence preferred ledger is the overall preferred ledger. If
+        a ledger has been marked invalid for this sequence number, it is not
+        eligible to be a preferred ledger.
 
         In this example, for D to be preferred, the number of validators
         supporting it or a descendant must exceed the number of validators
@@ -675,7 +742,8 @@ public:
         {
             // Within a single span, the preferred by branch strategy is simply
             // to continue along the span as long as the branch support of
-            // the next ledger exceeds the uncommitted support for that ledger.
+            // the next ledger exceeds the uncommitted support for that ledger
+            // and the ledger is not invalid.
             {
                 // Add any initial uncommitted support prior for ledgers
                 // earlier than nextSeq or earlier than largestIssued
@@ -689,7 +757,8 @@ public:
 
                 // Advance nextSeq along the span
                 while (nextSeq < curr->span.end() &&
-                       curr->branchSupport > uncommitted)
+                       curr->branchSupport > uncommitted &&
+                        nextSeq < curr->span.invalidFrom())
                 {
                     // Jump to the next seqSupport change
                     if (uncommittedIt != seqSupport.end() &&
@@ -701,6 +770,10 @@ public:
                     }
                     else // otherwise we jump to the end of the span
                         nextSeq = curr->span.end();
+
+                    // Don't jump past invalid spot
+                    if(curr->span.invalidFrom() < nextSeq)
+                        nextSeq = curr->span.invalidFrom();
                 }
                 // We did not consume the entire span, so we have found the
                 // preferred ledger
@@ -715,31 +788,49 @@ public:
             if (curr->children.size() == 1)
             {
                 best = curr->children[0].get();
-                margin = best->branchSupport;
+                if(best->span.startsValid())
+                    margin = best->branchSupport;
+                else
+                    best = nullptr;
+
             }
             else if (!curr->children.empty())
             {
                 // Sort placing children with largest branch support in the
-                // front, breaking ties with the span's starting ID
+                // front, breaking ties with the span's starting ID and placing
+                // spans with invalid starts at the end
                 std::partial_sort(
                     curr->children.begin(),
                     curr->children.begin() + 2,
                     curr->children.end(),
                     [](std::unique_ptr<Node> const& a,
                        std::unique_ptr<Node> const& b) {
-                        return std::make_tuple(a->branchSupport, a->span.startID()) >
-                            std::make_tuple(b->branchSupport, b->span.startID());
+                        return std::make_tuple(
+                                   a->span.startsValid(),
+                                   a->branchSupport,
+                                   a->span.startID()) >
+                            std::make_tuple(
+                                   b->span.startsValid(),
+                                   b->branchSupport,
+                                   b->span.startID());
                     });
 
                 best = curr->children[0].get();
-                margin = curr->children[0]->branchSupport -
-                    curr->children[1]->branchSupport;
+                if (best->span.startsValid())
+                {
+                    margin = curr->children[0]->branchSupport -
+                        curr->children[1]->branchSupport;
 
-                // If best holds the tie-breaker, gets one larger margin
-                // since the second best needs additional branchSupport
-                // to overcome the tie
-                if (best->span.startID() > curr->children[1]->span.startID())
-                    margin++;
+                    // If best holds the tie-breaker, gets one larger margin
+                    // since the second best needs additional branchSupport
+                    // to overcome the tie
+                    if ((best->span.startID() >
+                            curr->children[1]->span.startID()) ||
+                        !curr->children[1]->span.startsValid())
+                        margin++;
+                }
+                else
+                    best = nullptr;
             }
 
             // If the best child has margin exceeding the uncommitted support,
