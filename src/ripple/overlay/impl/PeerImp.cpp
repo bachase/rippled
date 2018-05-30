@@ -1645,6 +1645,15 @@ PeerImp::onMessage (std::shared_ptr <protocol::TMValidation> const& m)
             return;
         }
 
+        auto const publicKey = val->getSignerPublic();
+
+        if (!app_.getValidationPublicKey().empty() &&
+            publicKey == app_.getValidationPublicKey())
+        {
+            JLOG(p_journal_.trace()) << "Validation: self";
+            return;
+        }
+
         auto const isTrusted =
             app_.validators().trusted(val->getSignerPublic ());
 

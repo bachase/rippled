@@ -712,8 +712,6 @@ RCLConsensus::Adaptor::validate(RCLCxLedger const& ledger,
 
 
 
-    // suppress it if we receive it - FIXME: wrong suppression
-    app_.getHashRouter().addSuppression(v->getSigningHash());
     handleNewValidation(app_, v, "local");
     Blob validation = v->getSerialized();
     protocol::TMValidation val;
