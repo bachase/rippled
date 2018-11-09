@@ -38,33 +38,34 @@ class KnownFormats
 {
 public:
     /** A known format.
-    */
+     */
     class Item
     {
     public:
-        Item (char const* name, KeyType type)
-            : m_name (name)
-            , m_type (type)
+        Item(char const* name, KeyType type) : m_name(name), m_type(type)
         {
         }
 
-        Item& operator<< (SOElement const& el)
+        Item&
+        operator<<(SOElement const& el)
         {
-            elements.push_back (el);
+            elements.push_back(el);
 
             return *this;
         }
 
         /** Retrieve the name of the format.
-        */
-        std::string const& getName () const noexcept
+         */
+        std::string const&
+        getName() const noexcept
         {
             return m_name;
         }
 
         /** Retrieve the transaction type this format represents.
-        */
-        KeyType getType () const noexcept
+         */
+        KeyType
+        getType() const noexcept
         {
             return m_type;
         }
@@ -79,23 +80,24 @@ public:
     };
 
 private:
-    using NameMap = std::map <std::string, Item*>;
-    using TypeMap = std::map <KeyType, Item*>;
+    using NameMap = std::map<std::string, Item*>;
+    using TypeMap = std::map<KeyType, Item*>;
 
 public:
     /** Create the known formats object.
 
         Derived classes will load the object will all the known formats.
     */
-    KnownFormats () = default;
+    KnownFormats() = default;
 
     /** Destroy the known formats object.
 
         The defined formats are deleted.
     */
-    virtual ~KnownFormats () = default;
+    virtual ~KnownFormats() = default;
     KnownFormats(KnownFormats const&) = delete;
-    KnownFormats& operator=(KnownFormats const&) = delete;
+    KnownFormats&
+    operator=(KnownFormats const&) = delete;
 
     /** Retrieve the type for a format specified by name.
 
@@ -104,26 +106,28 @@ public:
         @param  name The name of the type.
         @return      The type.
     */
-    KeyType findTypeByName (std::string const name) const
+    KeyType
+    findTypeByName(std::string const name) const
     {
-        Item const* const result = findByName (name);
+        Item const* const result = findByName(name);
 
         if (result != nullptr)
-            return result->getType ();
-        Throw<std::runtime_error> ("Unknown format name");
-        return {}; // Silence compiler warning.
+            return result->getType();
+        Throw<std::runtime_error>("Unknown format name");
+        return {};  // Silence compiler warning.
     }
 
     /** Retrieve a format based on its type.
-    */
+     */
     // VFALCO TODO Can we just return the SOElement& ?
-    Item const* findByType (KeyType type) const noexcept
+    Item const*
+    findByType(KeyType type) const noexcept
     {
         Item* result = nullptr;
 
-        typename TypeMap::const_iterator const iter = m_types.find (type);
+        typename TypeMap::const_iterator const iter = m_types.find(type);
 
-        if (iter != m_types.end ())
+        if (iter != m_types.end())
         {
             result = iter->second;
         }
@@ -133,14 +137,15 @@ public:
 
 protected:
     /** Retrieve a format based on its name.
-    */
-    Item const* findByName (std::string const& name) const noexcept
+     */
+    Item const*
+    findByName(std::string const& name) const noexcept
     {
         Item* result = nullptr;
 
-        typename NameMap::const_iterator const iter = m_names.find (name);
+        typename NameMap::const_iterator const iter = m_names.find(name);
 
-        if (iter != m_names.end ())
+        if (iter != m_names.end())
         {
             result = iter->second;
         }
@@ -157,16 +162,16 @@ protected:
 
         @return The created format.
     */
-    Item& add (char const* name, KeyType type)
+    Item&
+    add(char const* name, KeyType type)
     {
-        m_formats.emplace_back (
-            std::make_unique <Item> (name, type));
-        auto& item (*m_formats.back());
+        m_formats.emplace_back(std::make_unique<Item>(name, type));
+        auto& item(*m_formats.back());
 
-        addCommonFields (item);
+        addCommonFields(item);
 
-        m_types [item.getType ()] = &item;
-        m_names [item.getName ()] = &item;
+        m_types[item.getType()] = &item;
+        m_names[item.getName()] = &item;
 
         return item;
     }
@@ -175,14 +180,16 @@ protected:
 
         This is called for every new item.
     */
-    virtual void addCommonFields (Item& item) = 0;
+    virtual void
+    addCommonFields(Item& item) = 0;
 
-private:
-    std::vector <std::unique_ptr <Item>> m_formats;
+    // private:
+    public:
+    std::vector<std::unique_ptr<Item>> m_formats;
     NameMap m_names;
     TypeMap m_types;
 };
 
-} // ripple
+}  // namespace ripple
 
 #endif
