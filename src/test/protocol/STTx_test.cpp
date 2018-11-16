@@ -38,18 +38,17 @@ public:
     {
         TxFormats const& formats = TxFormats::getInstance();
 
+        std::cout << "table,column,type,required\n";
         for (auto const it : formats.m_names)
         {
-            std::cout << "CREATE TABLE " << it.first << "\n";
-            std::cout << "(\n";
+            std::string table = it.first;
             for (auto const& field : it.second->elements.all())
             {
-                std::cout << "TxHash STRING\n";
-                std::cout << "LedgerIndex INTEGER\n";
                 if (field->flags != SOE_INVALID)
                 {
                     std::string name = field->e_field.getJsonName();
-                    std::cout << name << " ";
+                    std::cout << table << "," << name << ",";
+
                     switch (field->e_field.fieldType)
                     {
                         case STI_UINT8:
@@ -65,63 +64,13 @@ public:
                             std::cout << "STRING";
                             break;
                         case STI_AMOUNT:
-                            std::cout << R"(STRUCT<
-                               Drops INTEGER,
-                               Currency STRING,
-                               Value NUMERIC,
-                               Issuer STRING
-                            >)";
+                            std::cout << "AMOUNT";
                             break;
                         case STI_ARRAY:
-                            if (name == "Memos")
-                            {
-                                std::cout << R"(ARRAY<
-                                    STRUCT<
-                                        Memo STRUCT<
-                                            MemoData STRING,
-                                            MemoFormat STRING,
-                                            MemoType STRING
-                                            >
-                                        >
-                                >)";
-                            }
-                            else if (name == "SignerEntries")
-                            {
-                                std::cout << R"(ARRAY<
-                                    STRUCT<
-                                        SignerEntry STRUCT<
-                                            Account STRING,
-                                            SignerWeight INTEGER
-                                        >
-                                    >
-                                >)";
-                            }
-                            else if (name == "Signers")
-                            {
-                                std::cout << R"(ARRAY<
-                                    STRUCT<
-                                        Signer STRUCT<
-                                            Account STRING,
-                                            SigningPubKey STRING,
-                                            TxnSIgnaturre STRING
-                                        >
-                                    >
-                                >)";
-                            }
-                            fail("unknown use of STI_ARRAY in " + name);
+                            std::cout << "ARRAY_" << name;
                             break;
                         case STI_PATHSET:
-                            std::cout << R"(ARRAY<
-                                STRUCT<
-                                    Path STRUCT<
-                                       Account STRING,
-                                       Currency STRING,
-                                       Issuer STRING,
-                                       Type INTEGER,
-                                       TypeHex STRING
-                                    >
-                                >
-                            >)";
+                            std::cout << "PATHSET";
                             break;
                         default:
                             fail(
@@ -129,11 +78,12 @@ public:
                                 std::to_string(field->e_field.fieldType));
                     }
                     if (field->flags == SOE_REQUIRED)
-                        std::cout << " NOT NULL";
+                        std::cout << ",Y";
+                    else
+                        std::cout << ",N";
                     std::cout << "\n";
                 }
             }
-            std::cout << "\n) PARTITION BY close_date\n;\n";
         }
 
         testcase("overly nested transactions");
