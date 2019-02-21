@@ -22,6 +22,7 @@
 #include <ripple/beast/utility/WrappedSink.h>
 #include <ripple/consensus/Consensus.h>
 #include <ripple/consensus/Validations.h>
+#include <ripple/protocol/PublicKey.h>
 #include <boost/container/flat_map.hpp>
 #include <boost/container/flat_set.hpp>
 #include <algorithm>
@@ -835,6 +836,36 @@ struct Peer
 
         // Will only relay if current
         return addTrustedValidation(v);
+    }
+
+    bool
+    haveValidated() const
+    {
+        return true;
+    }
+
+    Ledger::Seq
+    getValidLedgerIndex() const
+    {
+        return Ledger::Seq(500);
+    }
+
+    std::pair<std::size_t, hash_set<PublicKey>>
+    getQuorumKeys() const
+    {
+        return {0, {}};
+    }
+
+    std::size_t
+    laggards(Ledger::Seq const seq, hash_set<PublicKey>& trustedNodes)
+    {
+        return 0;
+    }
+
+    bool
+    validator() const
+    {
+        return true;
     }
 
     //--------------------------------------------------------------------------

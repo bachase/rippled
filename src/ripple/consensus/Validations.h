@@ -26,6 +26,7 @@
 #include <ripple/beast/container/aged_container_utility.h>
 #include <ripple/beast/container/aged_unordered_map.h>
 #include <ripple/consensus/LedgerTrie.h>
+#include <ripple/protocol/PublicKey.h>
 #include <boost/optional.hpp>
 #include <mutex>
 #include <utility>
@@ -73,6 +74,16 @@ struct ValidationParms
         for a reasonable interval.
     */
     std::chrono::seconds validationSET_EXPIRES = std::chrono::minutes{10};
+
+    /** How long we consider a validation fresh.
+     *
+     *  The number of seconds since a validation has been seen for it to
+     *  be considered to accurately represent a live proposer's most recent
+     *  validation. This value should be sufficiently higher than
+     *  ledgerMAX_CONSENSUS such that validators who are waiting for
+     *  laggards are not considered offline.
+     */
+    std::chrono::seconds validationFRESHNESS = std::chrono::seconds {20};
 };
 
 /** Enforce validation increasing sequence requirement.
@@ -965,6 +976,42 @@ public:
         }
 
         adaptor_.flush(std::move(flushed));
+    }
+
+    /** Return quantity of lagging proposers, and remove offline proposers
+     *  for purposes of evaluating whether to pause.
+     *
+     *  Laggards are the trusted proposers whose sequence number is lower
+     *  than the sequence number from which our current pending proposal
+     *  is based. Proposers are considered offline from whom we have not
+     *  received a validation for awhile.
+     *
+     *  Note: the trusted flag is not used in this evaluation because it's made
+     *  redundant by checking the list of proposers.
+     *
+     * @param seq Our current sequence number.
+     * @param trustedNodes Public keys of trusted proposers.
+     * @return Quantity of laggards.
+     */
+    std::size_t
+    laggards(Seq const seq, hash_set<PublicKey>& trustedNodes)
+    {
+        std::size_t laggards = 0;
+
+        current(ScopedLock{mutex_},
+            [](std::size_t) {},
+            [&](NodeID const&, Validation const& v) {
+                if (adaptor_.now() <
+                        v.seenTime() + parms_.validationFRESHNESS &&
+                    trustedNodes.find(v.key()) != trustedNodes.end())
+                {
+                    trustedNodes.erase(v.key());
+                    if (seq > v.seq())
+                        ++laggards;
+                }
+            });
+
+        return laggards;
     }
 };
 

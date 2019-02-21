@@ -29,6 +29,8 @@
 #include <ripple/consensus/LedgerTiming.h>
 #include <ripple/consensus/DisputedTx.h>
 #include <ripple/json/json_writer.h>
+#include <boost/logic/tribool.hpp>
+#include <sstream>
 
 namespace ripple {
 
@@ -473,6 +475,31 @@ private:
     */
     void
     phaseEstablish();
+
+    /** Evaluate whether pausing increases likelihood of validation.
+     *
+     *  As a validator that has previously synced to the network, if our most
+     *  recent locally-validated ledger did not also achieve
+     *  network consensus, then consider pausing for awhile based on
+     *  the state of other validators.
+     *
+     *  Pausing may be beneficial in this situation if at least one validator
+     *  is known to be on a sequence number earlier than ours. The minimum
+     *  number of validators on the same sequence number does not guarantee
+     *  consensus, and waiting for all validators may be too time-consuming.
+     *  Therefore, a variable threshold is enacted based on the number
+     *  of ledgers past network validation that we are on. For the first phase,
+     *  the threshold is also the minimum required for quorum. For the last,
+     *  no online validators can have a lower sequence number. For intermediate
+     *  phases, the threshold is linear between the minimum required for
+     *  quorum and 100%. For example, with 3 total phases and a quorum of
+     *  80%, the 2nd phase would be 90%. Once the final phase is reached,
+     *  if consensus still fails to occur, the cycle is begun again at phase 1.
+     *
+     * @return Whether to pause to wait for lagging proposers.
+     */
+    bool
+    shouldPause() const;
 
     // Close the open ledger and establish initial position.
     void
@@ -1109,6 +1136,93 @@ Consensus<Adaptor>::phaseOpen()
 }
 
 template <class Adaptor>
+bool
+Consensus<Adaptor>::shouldPause() const
+{
+    auto const& parms = adaptor_.parms();
+    std::uint32_t const desynced =
+        previousLedger_.seq() -
+        std::min(adaptor_.getValidLedgerIndex(), previousLedger_.seq());
+    auto quorumKeys = adaptor_.getQuorumKeys();
+    auto const& quorum = quorumKeys.first;
+    auto& trustedKeys = quorumKeys.second;
+    std::size_t const totalValidators = trustedKeys.size();
+    std::size_t laggards = adaptor_.laggards(previousLedger_.seq(),
+        trustedKeys);
+
+    std::stringstream vars;
+    vars << " (working seq: " << previousLedger_.seq() << ", "
+         << "validated seq: " << adaptor_.getValidLedgerIndex() << ", "
+         << "am validator: " << adaptor_.validator() << ", "
+         << "have validated: " << adaptor_.haveValidated() << ", "
+         << "roundTime: " << result_->roundTime.read().count() << ", "
+         << "max consensus time: " << parms.ledgerMAX_CONSENSUS.count() << ", "
+         << "validators: " << totalValidators << ", "
+         << "laggards: " << laggards << ", "
+         << "offline: " << trustedKeys.size() << ", "
+         << "quorum: " << quorum << ", "
+         << "pause phases: " << parms.PAUSE_PHASES << ")";
+
+    if (!desynced ||
+        !laggards ||
+        !totalValidators ||
+        !adaptor_.validator() ||
+        !adaptor_.haveValidated() ||
+        result_->roundTime.read() > parms.ledgerMAX_CONSENSUS)
+    {
+        j_.debug() << "not pausing" << vars.str();
+        return false;
+    }
+
+    bool willPause = false;
+    std::size_t const phase = desynced % parms.PAUSE_PHASES;
+
+    // validators that remain after the laggards() function are considered
+    // offline, and should be considered as laggards for purposes of
+    // evaluating whether the threshold for non-laggards has been reached.
+    switch (phase)
+    {
+        case 0:
+            // Laggards and offline shouldn't preclude consensus.
+            if (laggards + trustedKeys.size() > totalValidators - quorum)
+                willPause = true;
+            break;
+        case parms.PAUSE_PHASES - 1:
+            // No tolerance.
+            willPause = true;
+            break;
+        default:
+            // Ensure that sufficient validators are known to be not lagging.
+            // Their sufficiently most recent validation sequence was equal to
+            // or greater than our own.
+            //
+            // The threshold is the amount required for quorum plus
+            // the proportion of the remainder based on number of intermediate
+            // phases between 0 and max.
+            float const nonLaggards = totalValidators -
+                (laggards + trustedKeys.size());
+            float const quorumRatio =
+                static_cast<float>(quorum) / totalValidators;
+            float const allowedDissent =
+                static_cast<float>(totalValidators - quorum) / totalValidators;
+            float const phaseFactor =
+                static_cast<float>(phase) / (parms.PAUSE_PHASES - 1);
+
+            if (nonLaggards / totalValidators <
+                quorumRatio + (allowedDissent * phaseFactor))
+            {
+                willPause = true;
+            }
+    }
+
+    if (willPause)
+        j_.warn() << "pausing" << vars.str();
+    else
+        j_.debug() << "not pausing" << vars.str();
+    return willPause;
+}
+
+template <class Adaptor>
 void
 Consensus<Adaptor>::phaseEstablish()
 {
@@ -1130,8 +1244,8 @@ Consensus<Adaptor>::phaseEstablish()
 
     updateOurPositions();
 
-    // Nothing to do if we don't have consensus.
-    if (!haveConsensus())
+    // Nothing to do if too many laggards or we don't have consensus.
+    if (shouldPause() || !haveConsensus())
         return;
 
     if (!haveCloseTimeConsensus_)

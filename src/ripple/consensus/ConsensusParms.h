@@ -82,6 +82,15 @@ struct ConsensusParms
     std::chrono::milliseconds ledgerMIN_CONSENSUS =
         std::chrono::milliseconds {1950};
 
+    /** The maximum amount of time to spend pausing for laggards.
+     *
+     *  This should be sufficiently less than validationFRESHNESS so that
+     *  validators don't appear to be offline that are merely waiting for
+     *  laggards.
+     */
+    std::chrono::milliseconds ledgerMAX_CONSENSUS =
+        std::chrono::seconds {10};
+
     //! Minimum number of seconds to wait to ensure others have computed the LCL
     std::chrono::milliseconds ledgerMIN_CLOSE = std::chrono::seconds {2};
 
@@ -129,6 +138,26 @@ struct ConsensusParms
 
     //! Percentage of nodes required to reach agreement on ledger close time
     std::size_t avCT_CONSENSUS_PCT = 75;
+
+    /** Number of phases with distinct thresholds to determine how
+     *  many validators must be on our same ledger sequence number.
+     *  The threshold for the 1st phase is >= the minimum number that
+     *  can achieve quorum. Threshold for the maximum phase is 100%
+     *  of all trusted validators. Progression from min to max phase is
+     *  simply linear. If there are 5 phases and minimum quorum is
+     *  80%, then thresholds progress as follows:
+     *  1: >=80%
+     *  2: >=85%
+     *  3: >=90%
+     *  4: >=95%
+     *  5: =100%
+     *
+     *  With 3 phases:
+     *  1: >=80%
+     *  2: >=90%
+     *  3: =100%
+     */
+    constexpr static std::size_t PAUSE_PHASES = 3;
 
     //--------------------------------------------------------------------------
 
