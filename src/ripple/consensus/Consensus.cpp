@@ -34,6 +34,7 @@ shouldCloseLedger(
     std::chrono::milliseconds openTime,  // Time waiting to close this ledger
     std::chrono::milliseconds idleInterval,
     ConsensusParms const& parms,
+    bool const already,
     beast::Journal j)
 {
     using namespace std::chrono_literals;
@@ -55,6 +56,11 @@ shouldCloseLedger(
         JLOG(j.trace()) << "Others have closed";
         return true;
     }
+
+    // If the current sequence number has already been validated by the
+    // network, we should close.
+    if (already)
+        return true;
 
     if (!anyTransactions)
     {
@@ -114,22 +120,25 @@ checkConsensus(
     std::chrono::milliseconds currentAgreeTime,
     ConsensusParms const& parms,
     bool proposing,
+    bool const already,
     beast::Journal j)
 {
     JLOG(j.trace()) << "checkConsensus: prop=" << currentProposers << "/"
                     << prevProposers << " agree=" << currentAgree
                     << " validated=" << currentFinished
                     << " time=" << currentAgreeTime.count() << "/"
-                    << previousAgreeTime.count();
+                    << previousAgreeTime.count()
+                    << " sequence already validated=" << already;
 
-    if (currentAgreeTime <= parms.ledgerMIN_CONSENSUS)
+    if (currentAgreeTime <= parms.ledgerMIN_CONSENSUS && !already)
         return ConsensusState::No;
 
     if (currentProposers < (prevProposers * 3 / 4))
     {
         // Less than 3/4 of the last ledger's proposers are present; don't
         // rush: we may need more time.
-        if (currentAgreeTime < (previousAgreeTime + parms.ledgerMIN_CONSENSUS))
+        if (currentAgreeTime < (previousAgreeTime + parms.ledgerMIN_CONSENSUS)
+            && !already)
         {
             JLOG(j.trace()) << "too fast, not enough proposers";
             return ConsensusState::No;

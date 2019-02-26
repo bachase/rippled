@@ -951,6 +951,16 @@ RCLConsensus::Adaptor::laggards(Ledger_t::Seq const seq,
 }
 
 bool
+RCLConsensus::Adaptor::already(Ledger_t::Seq const seq) const
+{
+    bool const ret = app_.getValidations().maxBySeq(seq + 1) >=
+        app_.validators().quorum();
+    if (ret)
+        j_.debug() << "consensus already reached for seq " << seq;
+    return ret;
+}
+
+bool
 RCLConsensus::Adaptor::validator() const
 {
     return !valPublic_.empty();

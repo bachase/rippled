@@ -863,6 +863,12 @@ struct Peer
     }
 
     bool
+    already(Ledger::Seq const seq) const
+    {
+        return false;
+    }
+
+    bool
     validator() const
     {
         return true;

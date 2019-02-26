@@ -29,6 +29,8 @@
 #include <ripple/protocol/PublicKey.h>
 #include <boost/optional.hpp>
 #include <mutex>
+#include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -1012,6 +1014,34 @@ public:
             });
 
         return laggards;
+    }
+
+    /** Number of validations for ledger with most validations by sequence.
+     *
+     *  For the given sequence, tally trusted validations for each ledger.
+     *  Return the tally for the one with the most.
+     *
+     * @param seq Sequence to compare.
+     * @return Number of validations for ledger with most validations by seq.
+     */
+    std::size_t
+    maxBySeq(Seq const seq)
+    {
+        std::unordered_map<std::string, std::size_t> byId;
+        current(ScopedLock{mutex_},
+            [](std::size_t) {},
+            [&](NodeID const&, Validation const& v) {
+                if (v.trusted() && v.full() && v.seq() == seq)
+                    ++byId[to_string(v.ledgerID())];
+            });
+
+        std::size_t max = 0;
+        for (auto const& c : byId)
+        {
+            if (c.second > max)
+                max = c.second;
+        }
+        return max;
     }
 };
 

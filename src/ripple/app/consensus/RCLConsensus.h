@@ -147,6 +147,17 @@ class RCLConsensus
         laggards(Ledger_t::Seq const seq,
             hash_set<PublicKey>& trustedKeys) const;
 
+        /** Whether the network has already validated the next sequence.
+         *
+         *  If sufficient validations have occurred for the ledger upon
+         *  which we are currently working, then return true.
+         *
+         * @param seq Sequence from ledger upon which we are working.
+         * @return Whether the network has validated this.
+         */
+        bool
+        already(Ledger_t::Seq const seq) const;
+
         /** Whether I am a validator.
          *
          * @return whether I am a validator.

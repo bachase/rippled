@@ -64,6 +64,7 @@ shouldCloseLedger(
     std::chrono::milliseconds openTime,
     std::chrono::milliseconds idleInterval,
     ConsensusParms const & parms,
+    bool const already,
     beast::Journal j);
 
 /** Determine whether the network reached consensus and whether we joined.
@@ -78,6 +79,8 @@ shouldCloseLedger(
                             agree
     @param parms            Consensus constant parameters
     @param proposing        whether we should count ourselves
+    @param already          Whether the network has already validated the
+                            sequence from which we're working.
     @param j                journal for logging
 */
 ConsensusState
@@ -90,6 +93,7 @@ checkConsensus(
     std::chrono::milliseconds currentAgreeTime,
     ConsensusParms const & parms,
     bool proposing,
+    bool const already,
     beast::Journal j);
 
 /** Generic implementation of consensus algorithm.
@@ -1129,6 +1133,7 @@ Consensus<Adaptor>::phaseOpen()
             openTime_.read(),
             idleInterval,
             adaptor_.parms(),
+            adaptor_.already(previousLedger_.seq()),
             j_))
     {
         closeLedger();
@@ -1549,6 +1554,7 @@ Consensus<Adaptor>::haveConsensus()
         result_->roundTime.read(),
         adaptor_.parms(),
         mode_.get() == ConsensusMode::proposing,
+        adaptor_.already(previousLedger_.seq()),
         j_);
 
     if (result_->state == ConsensusState::No)
