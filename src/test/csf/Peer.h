@@ -80,7 +80,6 @@ struct Peer
         Proposal proposal_;
     };
 
-
     /** Simulated delays in internal peer processing.
      */
     struct ProcessingDelays
@@ -110,8 +109,9 @@ struct Peer
         }
     };
 
-    /** Generic Validations adaptor that simply ignores recently stale validations
-    */
+    /** Generic Validations adaptor that simply ignores recently stale
+     * validations
+     */
     class ValAdaptor
     {
         Peer& p_;
@@ -154,9 +154,9 @@ struct Peer
         }
 
         boost::optional<Ledger>
-        acquire(Ledger::ID const & id)
+        acquire(Ledger::ID const& id)
         {
-            if(Ledger const * ledger = p_.acquireLedger(id))
+            if (Ledger const* ledger = p_.acquireLedger(id))
                 return *ledger;
             return boost::none;
         }
@@ -221,8 +221,8 @@ struct Peer
     bc::flat_map<TxSet::ID, TxSet> txSets;
 
     // Ledgers/TxSets we are acquiring and when that request times out
-    bc::flat_map<Ledger::ID,SimTime> acquiringLedgers;
-    bc::flat_map<TxSet::ID,SimTime> acquiringTxSets;
+    bc::flat_map<Ledger::ID, SimTime> acquiringLedgers;
+    bc::flat_map<TxSet::ID, SimTime> acquiringTxSets;
 
     //! The number of ledgers this peer has completed
     int completedLedgers = 0;
@@ -242,7 +242,7 @@ struct Peer
     //! Enforce invariants on validation sequence numbers
     SeqEnforcer<Ledger::Seq> seqEnforcer;
 
-    //TODO: Consider removing these two, they are only a convenience for tests
+    // TODO: Consider removing these two, they are only a convenience for tests
     // Number of proposers in the prior round
     std::size_t prevProposers = 0;
     // Duration of prior round
@@ -256,7 +256,7 @@ struct Peer
     ConsensusParms consensusParms;
 
     //! The collectors to report events to
-    CollectorRefs & collectors;
+    CollectorRefs& collectors;
 
     /** Constructor
 
@@ -316,7 +316,7 @@ struct Peer
     // Issue a new event to the collectors
     template <class E>
     void
-    issue(E const & event)
+    issue(E const& event)
     {
         // Use the scheduler time and not the peer's (skewed) local time
         collectors.on(id, scheduler.now(), event);
@@ -329,31 +329,31 @@ struct Peer
 
     //< Extend trust to a peer
     void
-    trust(Peer & o)
+    trust(Peer& o)
     {
         trustGraph.trust(this, &o);
     }
 
     //< Revoke trust from a peer
     void
-    untrust(Peer & o)
+    untrust(Peer& o)
     {
         trustGraph.untrust(this, &o);
     }
 
     //< Check whether we trust a peer
     bool
-    trusts(Peer & o)
+    trusts(Peer& o)
     {
         return trustGraph.trusts(this, &o);
     }
 
     //< Check whether we trust a peer based on its ID
     bool
-    trusts(PeerID const & oId)
+    trusts(PeerID const& oId)
     {
-        for(auto const & p : trustGraph.trustedPeers(this))
-            if(p->id == oId)
+        for (auto const& p : trustGraph.trustedPeers(this))
+            if (p->id == oId)
                 return true;
         return false;
     }
@@ -368,7 +368,7 @@ struct Peer
     */
 
     bool
-    connect(Peer & o, SimDuration dur)
+    connect(Peer& o, SimDuration dur)
     {
         return net.connect(this, &o, dur);
     }
@@ -381,7 +381,7 @@ struct Peer
         @return Whether the connection was removed
     */
     bool
-    disconnect(Peer & o)
+    disconnect(Peer& o)
     {
         return net.disconnect(this, &o);
     }
@@ -398,14 +398,14 @@ struct Peer
             return &(it->second);
 
         // No peers
-        if(net.links(this).empty())
+        if (net.links(this).empty())
             return nullptr;
 
         // Don't retry if we already are acquiring it and haven't timed out
         auto aIt = acquiringLedgers.find(ledgerID);
-        if(aIt!= acquiringLedgers.end())
+        if (aIt != acquiringLedgers.end())
         {
-            if(scheduler.now() < aIt->second)
+            if (scheduler.now() < aIt->second)
                 return nullptr;
         }
 
@@ -417,14 +417,14 @@ struct Peer
 
             // Send a messsage to neighbors to find the ledger
             net.send(
-                this, link.target, [ to = link.target, from = this, ledgerID ]() {
+                this, link.target, [to = link.target, from = this, ledgerID]() {
                     auto it = to->ledgers.find(ledgerID);
                     if (it != to->ledgers.end())
                     {
                         // if the ledger is found, send it back to the original
                         // requesting peer where it is added to the available
                         // ledgers
-                        to->net.send(to, from, [ from, ledger = it->second ]() {
+                        to->net.send(to, from, [from, ledger = it->second]() {
                             from->acquiringLedgers.erase(ledger.id());
                             from->ledgers.emplace(ledger.id(), ledger);
                         });
@@ -444,14 +444,14 @@ struct Peer
             return &(it->second);
 
         // No peers
-        if(net.links(this).empty())
+        if (net.links(this).empty())
             return nullptr;
 
         // Don't retry if we already are acquiring it and haven't timed out
         auto aIt = acquiringTxSets.find(setId);
-        if(aIt!= acquiringTxSets.end())
+        if (aIt != acquiringTxSets.end())
         {
-            if(scheduler.now() < aIt->second)
+            if (scheduler.now() < aIt->second)
                 return nullptr;
         }
 
@@ -462,14 +462,14 @@ struct Peer
             minDuration = std::min(minDuration, link.data.delay);
             // Send a message to neighbors to find the tx set
             net.send(
-                this, link.target, [ to = link.target, from = this, setId ]() {
+                this, link.target, [to = link.target, from = this, setId]() {
                     auto it = to->txSets.find(setId);
                     if (it != to->txSets.end())
                     {
                         // If the txSet is found, send it back to the original
                         // requesting peer, where it is handled like a TxSet
                         // that was broadcast over the network
-                        to->net.send(to, from, [ from, txSet = it->second ]() {
+                        to->net.send(to, from, [from, txSet = it->second]() {
                             from->acquiringTxSets.erase(txSet.id());
                             from->handle(txSet);
                         });
@@ -493,7 +493,7 @@ struct Peer
     }
 
     std::size_t
-    proposersFinished(Ledger const & prevLedger, Ledger::ID const& prevLedgerID)
+    proposersFinished(Ledger const& prevLedger, Ledger::ID const& prevLedgerID)
     {
         return validations.getNodesAfter(prevLedger, prevLedgerID);
     }
@@ -650,8 +650,7 @@ struct Peer
     }
 
     // Not interested in tracking consensus mode changes for now
-    void
-    onModeChange(ConsensusMode, ConsensusMode)
+    void onModeChange(ConsensusMode, ConsensusMode)
     {
     }
 
@@ -661,12 +660,12 @@ struct Peer
     share(M const& m)
     {
         issue(Share<M>{m});
-        send(BroadcastMesg<M>{m,router.nextSeq++, this->id}, this->id);
+        send(BroadcastMesg<M>{m, router.nextSeq++, this->id}, this->id);
     }
 
     // Unwrap the Position and share the raw proposal
     void
-    share(Position const & p)
+    share(Position const& p)
     {
         share(p.proposal());
     }
@@ -682,7 +681,7 @@ struct Peer
         v.setSeen(now());
         ValStatus const res = validations.add(v.nodeID(), v);
 
-        if(res == ValStatus::stale)
+        if (res == ValStatus::stale)
             return false;
 
         // Acquire will try to get from network if not already local
@@ -719,7 +718,8 @@ struct Peer
     //   number, or will process and potentially relay the message along.
     //
     //  The various bool handle(MessageType) members do the actual processing
-    //  and should return true if the message should continue to be sent to peers.
+    //  and should return true if the message should continue to be sent to
+    //  peers.
     //
     //  WARN: This assumes messages are received and processed in the order they
     //        are sent, so that a peer receives a message with seq 1 from node 0
@@ -757,7 +757,9 @@ struct Peer
                 {
                     issue(Relay<M>{link.target->id, bm.mesg});
                     net.send(
-                        this, link.target, [to = link.target, bm, id = this->id ] {
+                        this,
+                        link.target,
+                        [to = link.target, bm, id = this->id] {
                             to->receive(bm, id);
                         });
                 }
@@ -774,8 +776,7 @@ struct Peer
         if (router.lastObservedSeq[bm.origin] < bm.seq)
         {
             router.lastObservedSeq[bm.origin] = bm.seq;
-            schedule(delays.onReceive(bm.mesg), [this, bm, from]
-            {
+            schedule(delays.onReceive(bm.mesg), [this, bm, from] {
                 if (handle(bm.mesg))
                     send(bm, from);
             });
@@ -788,7 +789,7 @@ struct Peer
     handle(Proposal const& p)
     {
         // Only relay untrusted proposals on the same ledger
-        if(!trusts(p.nodeID()))
+        if (!trusts(p.nodeID()))
             return p.prevLedger() == lastClosedLedger.id();
 
         // TODO: This always suppresses relay of peer positions already seen
@@ -823,7 +824,6 @@ struct Peer
 
         // only relay if it was new to our open ledger
         return openTxs.insert(tx).second;
-
     }
 
     bool
@@ -843,7 +843,7 @@ struct Peer
     submit(Tx const& tx)
     {
         issue(SubmitTx{tx});
-        if(handle(tx))
+        if (handle(tx))
             share(tx);
     }
 
@@ -869,7 +869,7 @@ struct Peer
         // yet
         Ledger::ID bestLCL =
             validations.getPreferred(lastClosedLedger, earliestAllowedSeq());
-        if(bestLCL == Ledger::ID{0})
+        if (bestLCL == Ledger::ID{0})
             bestLCL = lastClosedLedger.id();
 
         issue(StartRound{bestLCL, lastClosedLedger});
@@ -904,7 +904,6 @@ struct Peer
             scheduler.now().time_since_epoch() + 86400s + clockSkew));
     }
 
-
     Ledger::ID
     prevLedgerID() const
     {
@@ -930,17 +929,16 @@ struct Peer
                 matches a previously registered Tx.
     */
     TxSet
-    injectTxs(Ledger prevLedger, TxSet const & src)
+    injectTxs(Ledger prevLedger, TxSet const& src)
     {
         auto const it = txInjections.find(prevLedger.seq());
 
-        if(it == txInjections.end())
+        if (it == txInjections.end())
             return src;
         TxSetType res{src.txs()};
         res.insert(it->second);
 
         return TxSet{res};
-
     }
 };
 
@@ -948,4 +946,3 @@ struct Peer
 }  // namespace test
 }  // namespace ripple
 #endif
-
