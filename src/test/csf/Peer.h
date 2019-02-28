@@ -239,9 +239,6 @@ struct Peer
     //! Whether to simulate running as validator or a tracking node
     bool runAsValidator = true;
 
-    //! Enforce invariants on validation sequence numbers
-    SeqEnforcer<Ledger::Seq> seqEnforcer;
-
     // TODO: Consider removing these two, they are only a convenience for tests
     // Number of proposers in the prior round
     std::size_t prevProposers = 0;
@@ -574,8 +571,7 @@ struct Peer
 
             // Can only send one validated ledger per seq
             if (runAsValidator && isCompatible && !consensusFail &&
-                seqEnforcer(
-                    scheduler.now(), newLedger.seq(), validations.parms()))
+                validations.canValidateSeq(newLedger.seq()))
             {
                 bool isFull = proposing;
 
