@@ -1,0 +1,6 @@
+<map id="ripple::NodeStore::Database" name="ripple::NodeStore::Database">
+<area shape="rect" id="node1" title="Persistency layer for NodeObject." alt="" coords="88,5,231,45"/>
+<area shape="rect" id="node2" href="$classripple_1_1NodeStore_1_1DatabaseNodeImp.html" title=" " alt="" coords="5,93,148,133"/>
+<area shape="rect" id="node3" href="$classripple_1_1NodeStore_1_1DatabaseRotating.html" title=" " alt="" coords="172,93,315,133"/>
+<area shape="rect" id="node4" href="$classripple_1_1NodeStore_1_1DatabaseRotatingImp.html" title=" " alt="" coords="161,181,325,221"/>
+</map>
